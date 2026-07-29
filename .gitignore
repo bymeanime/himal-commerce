@@ -56,3 +56,6 @@ server.log
 .ssh/
 *.pem
 *id_ed25519*
+
+# Local SQLite database
+/db/

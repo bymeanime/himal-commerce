@@ -5,10 +5,12 @@ import { calcShippingCost, getProvince } from '../src/lib/nepal'
 async function seed() {
   console.log('Seeding Himal Commerce multi-store platform...\n')
 
-  // Clear
+  // Clear (in dependency-safe order)
   await db.orderItem.deleteMany()
   await db.order.deleteMany()
   await db.customer.deleteMany()
+  await db.productVariant.deleteMany()
+  await db.productImage.deleteMany()
   await db.product.deleteMany()
   await db.category.deleteMany()
   await db.storeMember.deleteMany()
@@ -23,6 +25,7 @@ async function seed() {
         name: s.name,
         slug: s.slug,
         description: s.description,
+        tagline: (s as { tagline?: string }).tagline ?? null,
         logoUrl: s.logoUrl,
         primaryColor: s.primaryColor,
         accentColor: s.accentColor,
@@ -30,6 +33,14 @@ async function seed() {
         ownerName: s.ownerName,
         ownerEmail: s.ownerEmail,
         ownerPhone: s.ownerPhone,
+        supportPhone: (s as { supportPhone?: string }).supportPhone ?? null,
+        supportEmail: (s as { supportEmail?: string }).supportEmail ?? null,
+        address: (s as { address?: string }).address ?? null,
+        socialFacebook: (s as { socialFacebook?: string }).socialFacebook ?? null,
+        socialInstagram: (s as { socialInstagram?: string }).socialInstagram ?? null,
+        socialTiktok: (s as { socialTiktok?: string }).socialTiktok ?? null,
+        socialYoutube: (s as { socialYoutube?: string }).socialYoutube ?? null,
+        socialTwitter: (s as { socialTwitter?: string }).socialTwitter ?? null,
         plan: s.plan,
         status: 'active',
       },
@@ -57,7 +68,8 @@ async function seed() {
     console.log(`  + ${cats.length} categories for ${storeSlug}`)
   }
 
-  // ====== Create products ======
+  // ====== Create products (with optional variants) ======
+  let variantCount = 0
   for (const p of SEED_PRODUCTS) {
     const store = storeMap.get(p.storeSlug)!
     const category = await db.category.findFirst({
@@ -67,10 +79,17 @@ async function seed() {
       console.warn(`  ! Category ${p.categorySlug} not found for store ${p.storeSlug}`)
       continue
     }
-    await db.product.create({
+    // Generate slug from title
+    const slug = p.title.toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80)
+
+    const product = await db.product.create({
       data: {
         storeId: store.id,
         title: p.title,
+        slug,
         subtitle: p.subtitle,
         description: p.description,
         thumbnail: p.thumbnail,
@@ -82,10 +101,25 @@ async function seed() {
         origin: p.origin,
         isHandmade: p.isHandmade,
         categoryId: category.id,
+        // Variants (if provided)
+        variants: (p as { variants?: Array<{ title: string; sku?: string; price: number; inventory: number; attributes: Record<string, string> }> }).variants
+          ? {
+              create: ((p as { variants: Array<{ title: string; sku?: string; price: number; inventory: number; attributes: Record<string, string> }> }).variants).map((v, idx) => ({
+                title: v.title,
+                sku: v.sku ?? null,
+                price: v.price * 100, // NPR → paisa
+                inventory: v.inventory,
+                attributes: v.attributes,
+                sortOrder: idx,
+              })),
+            }
+          : undefined,
       },
+      include: { variants: true },
     })
+    if (product.variants.length) variantCount += product.variants.length
   }
-  console.log(`  + ${SEED_PRODUCTS.length} products across all stores`)
+  console.log(`  + ${SEED_PRODUCTS.length} products across all stores (${variantCount} variants)`)
 
   // ====== Create sample customers + orders per store ======
   const sampleCustomers = [

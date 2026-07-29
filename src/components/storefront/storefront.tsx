@@ -4,6 +4,7 @@ import { StorefrontHeader } from './header'
 import { Hero } from './hero'
 import { ProductGrid } from './product-grid'
 import { AboutSection } from './about-section'
+import { CategoryView } from './category-view'
 import { StorefrontFooter } from './footer'
 import { ProductDetailDrawer } from './product-detail-drawer'
 import { CartDrawer } from './cart-drawer'
@@ -47,6 +48,11 @@ export function Storefront() {
         {section === 'products' && (
           <div className="pt-4">
             <ProductGrid />
+          </div>
+        )}
+        {section === 'category' && (
+          <div className="pt-4">
+            <CategoryView />
           </div>
         )}
         {section === 'about' && (

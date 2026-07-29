@@ -23,12 +23,22 @@ export async function PUT(req: NextRequest, { params }: Params) {
   const data: Record<string, unknown> = {}
   if (body.name !== undefined) data.name = body.name
   if (body.description !== undefined) data.description = body.description
+  if (body.tagline !== undefined) data.tagline = body.tagline
   if (body.logoUrl !== undefined) data.logoUrl = body.logoUrl
+  if (body.bannerUrl !== undefined) data.bannerUrl = body.bannerUrl
   if (body.primaryColor !== undefined) data.primaryColor = body.primaryColor
   if (body.accentColor !== undefined) data.accentColor = body.accentColor
   if (body.ownerName !== undefined) data.ownerName = body.ownerName
   if (body.ownerEmail !== undefined) data.ownerEmail = body.ownerEmail
   if (body.ownerPhone !== undefined) data.ownerPhone = body.ownerPhone
+  if (body.supportPhone !== undefined) data.supportPhone = body.supportPhone
+  if (body.supportEmail !== undefined) data.supportEmail = body.supportEmail
+  if (body.address !== undefined) data.address = body.address
+  if (body.socialTwitter !== undefined) data.socialTwitter = body.socialTwitter
+  if (body.socialFacebook !== undefined) data.socialFacebook = body.socialFacebook
+  if (body.socialInstagram !== undefined) data.socialInstagram = body.socialInstagram
+  if (body.socialTiktok !== undefined) data.socialTiktok = body.socialTiktok
+  if (body.socialYoutube !== undefined) data.socialYoutube = body.socialYoutube
   if (body.status !== undefined) data.status = body.status
   if (body.plan !== undefined) data.plan = body.plan
 

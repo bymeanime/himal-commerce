@@ -16,7 +16,9 @@ model Store {
   name         String
   slug         String   @unique
   description  String?
+  tagline      String?
   logoUrl      String?
+  bannerUrl    String?
   // Branding
   primaryColor String   @default("#9C1A1A") // Nepal crimson default
   accentColor  String   @default("#E8B547") // Saffron default
@@ -25,6 +27,16 @@ model Store {
   ownerName    String
   ownerEmail   String?
   ownerPhone   String?
+  // Storefront contact info (shown in footer)
+  supportPhone String?
+  supportEmail String?
+  address      String?
+  // Social media
+  socialTwitter   String?
+  socialFacebook  String?
+  socialInstagram String?
+  socialTiktok    String?
+  socialYoutube   String?
   // Status
   status       String   @default("active") // active | suspended | draft
   plan         String   @default("free") // free | pro | enterprise
@@ -65,6 +77,7 @@ model Product {
   storeId     String
   store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
   title       String
+  slug        String?
   subtitle    String?
   description String
   thumbnail   String?
@@ -83,18 +96,56 @@ model Product {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   orderItems  OrderItem[]
+  variants    ProductVariant[]
+  images      ProductImage[]
 
   @@index([storeId])
+  @@unique([storeId, slug])
+}
+
+// Product variants — for size/color/weight options
+// Each variant has its own SKU, price override (optional), and inventory
+model ProductVariant {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku       String?
+  title     String  // e.g. "Red / Large" or "250g"
+  price     Int?    // paisa — overrides Product.price when set
+  inventory Int    @default(0)
+  attributes Json   // e.g. { color: "Red", size: "L" } or { weight: "250g" }
+  sortOrder Int    @default(0)
+  orderItems OrderItem[]
+
+  @@index([productId])
+}
+
+// Additional product images (beyond the thumbnail)
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  altText   String?
+  sortOrder Int    @default(0)
+
+  @@index([productId])
 }
 
 model Category {
-  id        String   @id @default(cuid())
-  storeId   String
-  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  name      String
-  slug      String
-  icon      String?
-  products  Product[]
+  id          String   @id @default(cuid())
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name        String
+  slug        String
+  icon        String?
+  description String?
+  imageUrl    String?
+  parentId    String?  // self-relation for hierarchy
+  parent      Category? @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryHierarchy")
+  sortOrder   Int      @default(0)
+  products    Product[]
 
   @@unique([storeId, slug])
   @@index([storeId])
@@ -124,7 +175,7 @@ model Order {
 
   // Payment — Nepal methods
   paymentMethod String // cod | esewa | khalti
-  paymentStatus String @default("unpaid") // unpaid | paid | refunded
+  paymentStatus String @default("unpaid") // unpaid | pending | paid | refunded
 
   // Money in paisa
   subtotal     Int
@@ -147,7 +198,10 @@ model OrderItem {
   order     Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
   productId String?
   product   Product? @relation(fields: [productId], references: [id])
+  variantId String?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id])
   title     String
+  variantTitle String? // snapshot of variant title, e.g. "Red / Large"
   thumbnail String?
   price     Int
   quantity  Int

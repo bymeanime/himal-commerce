@@ -7,22 +7,40 @@ import { formatNPR } from '@/lib/nepal'
 import type { Product } from '@/lib/types'
 import { useCart } from '@/lib/cart-store'
 import { useUI } from '@/lib/ui-store'
-import { ShoppingCart, MapPin, Hammer, Plus } from 'lucide-react'
+import { MapPin, Hammer, Plus, Layers } from 'lucide-react'
 import { toast } from 'sonner'
 
 export function ProductCard({ product }: { product: Product }) {
   const add = useCart((s) => s.add)
   const setSelectedProductId = useUI((s) => s.setSelectedProductId)
 
+  const variantCount = product.variants?.length ?? 0
+  const hasVariants = variantCount > 0
+
+  // For products with variants, "Add to cart" should open the detail drawer
+  // (so the user can pick the variant). For products without, add directly.
   const onAdd = (e: React.MouseEvent) => {
     e.stopPropagation()
-    add(product, 1)
-    toast.success('Added to cart', { description: product.title })
+    if (hasVariants) {
+      setSelectedProductId(product.id)
+      toast.info('Choose an option', { description: `${product.title} has ${variantCount} variants` })
+    } else {
+      add(product, 1, null)
+      toast.success('Added to cart', { description: product.title })
+    }
   }
 
   const discount = product.compareAt && product.compareAt > product.price
     ? Math.round((1 - product.price / product.compareAt) * 100)
     : 0
+
+  // Compute price range if variants have different prices
+  const variantPrices = (product.variants ?? [])
+    .map(v => v.price ?? product.price)
+    .filter(p => p > 0)
+  const minPrice = variantPrices.length ? Math.min(...variantPrices) : product.price
+  const maxPrice = variantPrices.length ? Math.max(...variantPrices) : product.price
+  const hasPriceRange = hasVariants && minPrice !== maxPrice
 
   return (
     <Card
@@ -50,8 +68,13 @@ export function ProductCard({ product }: { product: Product }) {
               -{discount}%
             </Badge>
           )}
+          {hasVariants && (
+            <Badge variant="outline" className="bg-background/85 shadow-sm">
+              <Layers className="h-3 w-3 mr-0.5" /> {variantCount} option{variantCount === 1 ? '' : 's'}
+            </Badge>
+          )}
         </div>
-        {product.inventory <= 0 && (
+        {product.inventory <= 0 && !hasVariants && (
           <div className="absolute inset-0 bg-background/70 grid place-items-center">
             <Badge variant="destructive">Out of stock</Badge>
           </div>
@@ -72,8 +95,14 @@ export function ProductCard({ product }: { product: Product }) {
           <p className="text-xs text-muted-foreground line-clamp-1">{product.subtitle}</p>
         )}
         <div className="flex items-center gap-2 pt-1">
-          <span className="font-bold text-primary text-base">{formatNPR(product.price)}</span>
-          {product.compareAt && product.compareAt > product.price && (
+          {hasPriceRange ? (
+            <span className="font-bold text-primary text-base">
+              {formatNPR(minPrice)} – {formatNPR(maxPrice)}
+            </span>
+          ) : (
+            <span className="font-bold text-primary text-base">{formatNPR(minPrice)}</span>
+          )}
+          {!hasPriceRange && product.compareAt && product.compareAt > product.price && (
             <span className="text-xs text-muted-foreground line-through">
               {formatNPR(product.compareAt)}
             </span>
@@ -84,10 +113,10 @@ export function ProductCard({ product }: { product: Product }) {
           className="w-full mt-2"
           variant="outline"
           onClick={onAdd}
-          disabled={product.inventory <= 0}
+          disabled={!hasVariants && product.inventory <= 0}
         >
           <Plus className="h-3.5 w-3.5 mr-1" />
-          Add to cart
+          {hasVariants ? 'Choose option' : 'Add to cart'}
         </Button>
       </div>
     </Card>

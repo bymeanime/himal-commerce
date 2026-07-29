@@ -15,9 +15,9 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { formatNPR } from '@/lib/nepal'
-import type { Product } from '@/lib/types'
-import { Minus, Plus, ShoppingCart, MapPin, Hammer, Package, X } from 'lucide-react'
-import { useState } from 'react'
+import type { Product, ProductVariant } from '@/lib/types'
+import { Minus, Plus, ShoppingCart, MapPin, Hammer, Package, X, Layers } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
 
 export function ProductDetailDrawer() {
@@ -26,6 +26,7 @@ export function ProductDetailDrawer() {
   const openCart = useCart((s) => s.open)
   const add = useCart((s) => s.add)
   const [qty, setQty] = useState(1)
+  const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null)
 
   const { data, isLoading } = useQuery<{ product: Product }>({
     queryKey: ['product', productId],
@@ -38,15 +39,51 @@ export function ProductDetailDrawer() {
   })
 
   const product = data?.product
+  const variants = product?.variants ?? []
+  const hasVariants = variants.length > 0
+  const selectedVariant: ProductVariant | null = useMemo(() => {
+    if (!hasVariants) return null
+    return variants.find(v => v.id === selectedVariantId) ?? variants[0] ?? null
+  }, [variants, selectedVariantId, hasVariants])
+
+  // Reset selections when product changes
+  useEffect(() => {
+    setQty(1)
+    setSelectedVariantId(null)
+  }, [productId])
+
+  // Effective price + inventory for the add-to-cart action
+  const effectivePrice = selectedVariant?.price ?? product?.price ?? 0
+  const effectiveInventory = hasVariants
+    ? (selectedVariant?.inventory ?? 0)
+    : (product?.inventory ?? 0)
 
   const handleAdd = () => {
     if (!product) return
-    add(product, qty)
-    toast.success('Added to cart', { description: `${qty} × ${product.title}` })
+    if (hasVariants && !selectedVariant) {
+      toast.error('Please select an option')
+      return
+    }
+    add(product, qty, selectedVariant)
+    const label = selectedVariant
+      ? `${qty} × ${product.title} — ${selectedVariant.title}`
+      : `${qty} × ${product.title}`
+    toast.success('Added to cart', { description: label })
     setSelectedProductId(null)
     setQty(1)
+    setSelectedVariantId(null)
     openCart()
   }
+
+  // Group variants by their primary attribute (size/color/weight) for nicer UI
+  // Each variant becomes a button in a single row.
+  const variantAttrKeys = useMemo(() => {
+    const keys = new Set<string>()
+    variants.forEach(v => {
+      Object.keys(v.attributes ?? {}).forEach(k => keys.add(k))
+    })
+    return Array.from(keys)
+  }, [variants])
 
   return (
     <Sheet
@@ -86,9 +123,13 @@ export function ProductDetailDrawer() {
                       <MapPin className="h-3 w-3 mr-1" /> {product.origin}
                     </Badge>
                   )}
-                  {product.inventory > 0 ? (
+                  {hasVariants ? (
+                    <Badge variant="outline" className="text-amber-700 border-amber-300 bg-amber-50">
+                      <Layers className="h-3 w-3 mr-1" /> {variants.length} option{variants.length === 1 ? '' : 's'}
+                    </Badge>
+                  ) : effectiveInventory > 0 ? (
                     <Badge variant="outline" className="text-emerald-700 border-emerald-300 bg-emerald-50">
-                      <Package className="h-3 w-3 mr-1" /> In stock ({product.inventory})
+                      <Package className="h-3 w-3 mr-1" /> In stock ({effectiveInventory})
                     </Badge>
                   ) : (
                     <Badge variant="destructive">Out of stock</Badge>
@@ -101,13 +142,62 @@ export function ProductDetailDrawer() {
               </div>
 
               <div className="flex items-end gap-3">
-                <span className="text-3xl font-bold text-primary">{formatNPR(product.price)}</span>
-                {product.compareAt && product.compareAt > product.price && (
+                <span className="text-3xl font-bold text-primary">{formatNPR(effectivePrice)}</span>
+                {!hasVariants && product.compareAt && product.compareAt > product.price && (
                   <span className="text-base text-muted-foreground line-through mb-1">
                     {formatNPR(product.compareAt)}
                   </span>
                 )}
               </div>
+
+              {/* Variant picker */}
+              {hasVariants && (
+                <div className="space-y-3">
+                  {variantAttrKeys.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {Object.entries(selectedVariant?.attributes ?? {}).map(([k, v]) => (
+                        <Badge key={k} variant="secondary" className="text-xs">
+                          <span className="font-medium text-muted-foreground mr-1">{k}:</span> {v}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {variants.map((v) => {
+                      const isSel = v.id === selectedVariant?.id
+                      const vPrice = v.price ?? product.price
+                      const out = v.inventory <= 0
+                      return (
+                        <button
+                          key={v.id}
+                          onClick={() => setSelectedVariantId(v.id)}
+                          disabled={out}
+                          className={`text-left rounded-md border p-2.5 transition-colors ${
+                            isSel
+                              ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                              : 'border-border hover:border-primary/40'
+                          } ${out ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        >
+                          <div className="text-sm font-medium line-clamp-1">{v.title}</div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
+                            {formatNPR(vPrice)}
+                            {out && <span className="text-destructive ml-1">· out of stock</span>}
+                            {!out && v.inventory <= 5 && <span className="text-amber-600 ml-1">· only {v.inventory} left</span>}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {selectedVariant && (
+                    <p className="text-xs text-muted-foreground">
+                      <Package className="inline h-3 w-3 mr-1" />
+                      {selectedVariant.inventory > 0
+                        ? `${selectedVariant.inventory} in stock`
+                        : 'Out of stock — choose another option'}
+                    </p>
+                  )}
+                </div>
+              )}
 
               <Separator />
 
@@ -137,8 +227,8 @@ export function ProductDetailDrawer() {
                     variant="ghost"
                     size="icon"
                     className="h-9 w-9 rounded-l-none"
-                    onClick={() => setQty(Math.min(product.inventory, qty + 1))}
-                    disabled={qty >= product.inventory}
+                    onClick={() => setQty(Math.min(effectiveInventory || 99, qty + 1))}
+                    disabled={effectiveInventory > 0 && qty >= effectiveInventory}
                   >
                     <Plus className="h-3.5 w-3.5" />
                   </Button>
@@ -147,15 +237,17 @@ export function ProductDetailDrawer() {
                   className="flex-1 h-11"
                   size="lg"
                   onClick={handleAdd}
-                  disabled={product.inventory <= 0}
+                  disabled={effectiveInventory <= 0 || (hasVariants && !selectedVariant)}
                 >
                   <ShoppingCart className="h-4 w-4 mr-2" />
-                  Add {qty} to cart · {formatNPR(product.price * qty)}
+                  Add {qty} to cart · {formatNPR(effectivePrice * qty)}
                 </Button>
               </div>
 
               {product.sku && (
-                <p className="text-xs text-muted-foreground">SKU: {product.sku}</p>
+                <p className="text-xs text-muted-foreground">
+                  SKU: {selectedVariant?.sku || product.sku}
+                </p>
               )}
             </div>
           </>

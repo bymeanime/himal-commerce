@@ -111,6 +111,7 @@ export function CheckoutModal() {
           notes: form.notes || undefined,
           items: items.map((i) => ({
             productId: i.productId,
+            variantId: i.variantId ?? undefined,
             title: i.title,
             thumbnail: i.thumbnail,
             price: i.price,
@@ -405,7 +406,7 @@ export function CheckoutModal() {
               </p>
               <div className="space-y-2 max-h-48 overflow-y-auto nice-scroll">
                 {items.map((it) => (
-                  <div key={it.productId} className="flex items-center gap-3">
+                  <div key={`${it.productId}-${it.variantId ?? 'default'}`} className="flex items-center gap-3">
                     <div className="h-12 w-12 shrink-0 rounded-md overflow-hidden bg-muted">
                       {it.thumbnail && (
                         <img src={it.thumbnail} alt={it.title} className="h-full w-full object-cover" />
@@ -413,7 +414,9 @@ export function CheckoutModal() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium line-clamp-1">{it.title}</p>
-                      <p className="text-xs text-muted-foreground">Qty: {it.quantity}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {it.variantTitle ? <>{it.variantTitle} · </> : null}Qty: {it.quantity}
+                      </p>
                     </div>
                     <span className="text-sm font-semibold">{formatNPR(it.price * it.quantity)}</span>
                   </div>

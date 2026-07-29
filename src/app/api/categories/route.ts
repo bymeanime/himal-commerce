@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   const categories = await db.category.findMany({
     where: { storeId },
     include: { _count: { select: { products: true } } },
-    orderBy: { name: 'asc' },
+    orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
   })
   return NextResponse.json({ categories })
 }
@@ -21,12 +21,23 @@ export async function GET(req: NextRequest) {
 // POST /api/categories
 export async function POST(req: NextRequest) {
   const body = await req.json()
-  const { storeId, name, slug, icon } = body
+  const { storeId, name, slug, icon, description, imageUrl, parentId, sortOrder } = body
   if (!storeId || !name || !slug) {
     return NextResponse.json({ error: 'storeId, name, slug are required' }, { status: 400 })
   }
   try {
-    const category = await db.category.create({ data: { storeId, name, slug, icon } })
+    const category = await db.category.create({
+      data: {
+        storeId,
+        name,
+        slug,
+        icon: icon ?? null,
+        description: description ?? null,
+        imageUrl: imageUrl ?? null,
+        parentId: parentId ?? null,
+        sortOrder: Number(sortOrder) || 0,
+      },
+    })
     return NextResponse.json({ category }, { status: 201 })
   } catch {
     return NextResponse.json({ error: 'Slug already exists for this store' }, { status: 400 })

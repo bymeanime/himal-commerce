@@ -5,6 +5,7 @@ import { AdminDashboard } from './dashboard'
 import { AdminProducts } from './products'
 import { AdminOrders } from './orders'
 import { AdminCustomers } from './customers'
+import { AdminCategories } from './categories'
 import { AdminSettings } from './settings'
 import { useUI } from '@/lib/ui-store'
 import { useCurrentStore } from '@/lib/use-current-store'
@@ -36,6 +37,7 @@ export function Admin() {
       {section === 'products' && <AdminProducts />}
       {section === 'orders' && <AdminOrders />}
       {section === 'customers' && <AdminCustomers />}
+      {section === 'categories' && <AdminCategories />}
       {section === 'settings' && <AdminSettings />}
     </AdminShell>
   )

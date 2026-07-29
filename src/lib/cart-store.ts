@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { CartItem, Product } from '@/lib/types'
+import type { CartItem, Product, ProductVariant } from '@/lib/types'
 
 type CartState = {
   items: CartItem[]
@@ -9,14 +9,18 @@ type CartState = {
   open: () => void
   close: () => void
   toggle: () => void
-  add: (product: Product, quantity?: number) => void
-  remove: (productId: string) => void
-  setQuantity: (productId: string, quantity: number) => void
+  add: (product: Product, quantity?: number, variant?: ProductVariant | null) => void
+  remove: (productId: string, variantId?: string | null) => void
+  setQuantity: (productId: string, quantity: number, variantId?: string | null) => void
   clear: () => void
   // derived
   count: () => number
   subtotal: () => number
 }
+
+// Match a cart line by productId + variantId (both must match)
+const lineMatch = (i: CartItem, productId: string, variantId?: string | null) =>
+  i.productId === productId && (i.variantId ?? null) === (variantId ?? null)
 
 export const useCart = create<CartState>()(
   persist(
@@ -27,17 +31,23 @@ export const useCart = create<CartState>()(
       open: () => set({ isOpen: true }),
       close: () => set({ isOpen: false }),
       toggle: () => set((s) => ({ isOpen: !s.isOpen })),
-      add: (product, quantity = 1) => {
+      add: (product, quantity = 1, variant = null) => {
+        const variantId = variant?.id ?? null
+        const variantTitle = variant?.title ?? null
+        const linePrice = variant?.price ?? product.price
+
         // If cart belongs to a different store, start fresh
         if (get().storeId && get().storeId !== product.storeId) {
           set({
             items: [
               {
                 productId: product.id,
+                variantId,
                 storeId: product.storeId,
                 title: product.title,
+                variantTitle,
                 thumbnail: product.thumbnail,
-                price: product.price,
+                price: linePrice,
                 quantity,
               },
             ],
@@ -46,12 +56,13 @@ export const useCart = create<CartState>()(
           })
           return
         }
+
         const items = get().items
-        const existing = items.find((i) => i.productId === product.id)
+        const existing = items.find((i) => lineMatch(i, product.id, variantId))
         if (existing) {
           set({
             items: items.map((i) =>
-              i.productId === product.id ? { ...i, quantity: i.quantity + quantity } : i
+              lineMatch(i, product.id, variantId) ? { ...i, quantity: i.quantity + quantity } : i
             ),
             storeId: product.storeId,
             isOpen: true,
@@ -62,10 +73,12 @@ export const useCart = create<CartState>()(
               ...items,
               {
                 productId: product.id,
+                variantId,
                 storeId: product.storeId,
                 title: product.title,
+                variantTitle,
                 thumbnail: product.thumbnail,
-                price: product.price,
+                price: linePrice,
                 quantity,
               },
             ],
@@ -74,14 +87,14 @@ export const useCart = create<CartState>()(
           })
         }
       },
-      remove: (productId) => {
-        const items = get().items.filter((i) => i.productId !== productId)
+      remove: (productId, variantId = null) => {
+        const items = get().items.filter((i) => !lineMatch(i, productId, variantId))
         set({ items, storeId: items.length === 0 ? null : get().storeId })
       },
-      setQuantity: (productId, quantity) =>
+      setQuantity: (productId, quantity, variantId = null) =>
         set({
           items: get()
-            .items.map((i) => (i.productId === productId ? { ...i, quantity } : i))
+            .items.map((i) => (lineMatch(i, productId, variantId) ? { ...i, quantity } : i))
             .filter((i) => i.quantity > 0),
         }),
       clear: () => set({ items: [], storeId: null }),

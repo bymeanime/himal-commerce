@@ -3,8 +3,8 @@ import { persist } from 'zustand/middleware'
 
 // Top-level view switcher (since only `/` route is allowed)
 type View = 'platform' | 'storefront' | 'admin'
-type StoreSection = 'home' | 'products' | 'about'
-type AdminSection = 'dashboard' | 'products' | 'orders' | 'customers' | 'settings'
+type StoreSection = 'home' | 'products' | 'about' | 'category'
+type AdminSection = 'dashboard' | 'products' | 'orders' | 'customers' | 'categories' | 'settings'
 type PlatformSection = 'home' | 'stores' | 'super-admin'
 
 type UIState = {
@@ -24,6 +24,9 @@ type UIState = {
   setPlatformSection: (s: PlatformSection) => void
   setStoreSection: (s: StoreSection) => void
   setAdminSection: (s: AdminSection) => void
+  // Storefront: which category are we browsing?
+  selectedCategorySlug: string | null
+  setSelectedCategorySlug: (slug: string | null) => void
   // Product detail drawer
   selectedProductId: string | null
   setSelectedProductId: (id: string | null) => void
@@ -52,6 +55,8 @@ export const useUI = create<UIState>()(
       setPlatformSection: (s) => set({ platformSection: s }),
       setStoreSection: (s) => set({ storeSection: s }),
       setAdminSection: (s) => set({ adminSection: s }),
+      selectedCategorySlug: null,
+      setSelectedCategorySlug: (slug) => set({ selectedCategorySlug: slug }),
       selectedProductId: null,
       setSelectedProductId: (id) => set({ selectedProductId: id }),
       checkoutOpen: false,

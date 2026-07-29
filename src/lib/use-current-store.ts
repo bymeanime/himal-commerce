@@ -1,12 +1,13 @@
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useUI } from '@/lib/ui-store'
 import type { Store } from '@/lib/types'
 
 // Returns the current store object (or null if at platform level)
 export function useCurrentStore() {
   const storeId = useUI((s) => s.currentStoreId)
+  const qc = useQueryClient()
   const { data, isLoading } = useQuery<{ store: Store | null }>({
     queryKey: ['store', storeId],
     queryFn: async () => {
@@ -17,5 +18,10 @@ export function useCurrentStore() {
     },
     enabled: !!storeId,
   })
-  return { store: data?.store ?? null, isLoading, storeId }
+  return {
+    store: data?.store ?? null,
+    isLoading,
+    storeId,
+    refetch: () => qc.invalidateQueries({ queryKey: ['store', storeId] }),
+  }
 }

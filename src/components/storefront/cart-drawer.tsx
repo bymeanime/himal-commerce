@@ -58,7 +58,7 @@ export function CartDrawer() {
           <>
             <div className="flex-1 overflow-y-auto nice-scroll space-y-3 py-4">
               {items.map((item) => (
-                <div key={item.productId} className="flex gap-3 rounded-lg border border-border/60 p-3">
+                <div key={`${item.productId}-${item.variantId ?? 'default'}`} className="flex gap-3 rounded-lg border border-border/60 p-3">
                   <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md bg-muted">
                     {item.thumbnail ? (
                       <img src={item.thumbnail} alt={item.title} className="h-full w-full object-cover" />
@@ -68,6 +68,9 @@ export function CartDrawer() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium line-clamp-2">{item.title}</p>
+                    {item.variantTitle && (
+                      <p className="text-xs text-muted-foreground mt-0.5">{item.variantTitle}</p>
+                    )}
                     <p className="text-sm text-primary font-semibold mt-0.5">{formatNPR(item.price)}</p>
                     <div className="flex items-center justify-between mt-2">
                       <div className="flex items-center border border-border rounded-md">
@@ -75,7 +78,7 @@ export function CartDrawer() {
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 rounded-r-none"
-                          onClick={() => setQty(item.productId, item.quantity - 1)}
+                          onClick={() => setQty(item.productId, item.quantity - 1, item.variantId)}
                         >
                           <Minus className="h-3 w-3" />
                         </Button>
@@ -84,7 +87,7 @@ export function CartDrawer() {
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 rounded-l-none"
-                          onClick={() => setQty(item.productId, item.quantity + 1)}
+                          onClick={() => setQty(item.productId, item.quantity + 1, item.variantId)}
                         >
                           <Plus className="h-3 w-3" />
                         </Button>
@@ -93,7 +96,7 @@ export function CartDrawer() {
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                        onClick={() => remove(item.productId)}
+                        onClick={() => remove(item.productId, item.variantId)}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>

@@ -1,79 +1,288 @@
 'use client'
 
+import { useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
-  Store,
+  Store as StoreIcon,
   Wallet,
   Truck,
-  Bell,
   Globe,
   Mountain,
   Banknote,
-  ShieldCheck,
+  Share2,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useCurrentStore } from '@/lib/use-current-store'
+import type { Store } from '@/lib/types'
+
+// Social platform display config
+const SOCIALS: Array<{
+  key: 'socialTwitter' | 'socialFacebook' | 'socialInstagram' | 'socialTiktok' | 'socialYoutube'
+  label: string
+  placeholder: string
+}> = [
+  { key: 'socialFacebook', label: 'Facebook', placeholder: 'https://facebook.com/yourstore' },
+  { key: 'socialInstagram', label: 'Instagram', placeholder: 'https://instagram.com/yourstore' },
+  { key: 'socialTiktok', label: 'TikTok', placeholder: 'https://tiktok.com/@yourstore' },
+  { key: 'socialYoutube', label: 'YouTube', placeholder: 'https://youtube.com/@yourstore' },
+  { key: 'socialTwitter', label: 'Twitter / X', placeholder: 'https://twitter.com/yourstore' },
+]
 
 export function AdminSettings() {
+  const { store, storeId, refetch } = useCurrentStore()
+  const [form, setForm] = useState<Partial<Store> | null>(null)
+
+  // Initialize form from store once it loads
+  const current = form ?? store
+  const set = (k: keyof Store, v: string | null) => {
+    setForm({ ...(current ?? {}), [k]: v } as Partial<Store>)
+  }
+
+  const saveMut = useMutation({
+    mutationFn: async () => {
+      if (!storeId) throw new Error('No store')
+      const res = await fetch(`/api/stores/${storeId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(current),
+      })
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({ error: 'Save failed' }))
+        throw new Error(e.error)
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      toast.success('Settings saved')
+      setForm(null)
+      refetch?.()
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+
+  if (!store || !current) {
+    return (
+      <div className="p-6 space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-64 w-full" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    )
+  }
+
+  // Detect if there are unsaved changes
+  const dirty = form !== null
+
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-4xl">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Configure your store, payments, shipping, and localization.
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Settings</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Configure your store profile, contact info, and social media links.
+          </p>
+        </div>
+        {dirty && (
+          <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending}>
+            {saveMut.isPending ? 'Saving…' : 'Save changes'}
+          </Button>
+        )}
       </div>
 
       {/* Store profile */}
       <Card className="border-border/60">
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
-            <Store className="h-4 w-4 text-primary" /> Store profile
+            <StoreIcon className="h-4 w-4 text-primary" /> Store profile
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Store name</Label>
-              <Input defaultValue="Himal Commerce" />
+              <Input value={current.name} onChange={(e) => set('name', e.target.value)} />
             </div>
             <div className="space-y-1.5">
               <Label>Currency</Label>
-              <Input defaultValue="NPR (Nepali Rupee)" disabled />
+              <Input value={current.currency} disabled />
+              <p className="text-[11px] text-muted-foreground">Currency is fixed at the platform level for now.</p>
             </div>
           </div>
           <div className="space-y-1.5">
             <Label>Tagline</Label>
-            <Input defaultValue="Authentic Nepali goods, from mountain to your door." />
+            <Input
+              value={current.tagline ?? ''}
+              onChange={(e) => set('tagline', e.target.value)}
+              placeholder="A short, punchy tagline shown on your storefront hero"
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Store description</Label>
             <Textarea
               rows={3}
-              defaultValue="Himal Commerce is Nepal's headless commerce platform. We connect artisans across all 77 districts with customers nationwide, supporting local payment methods and cash on delivery."
+              value={current.description ?? ''}
+              onChange={(e) => set('description', e.target.value)}
             />
           </div>
           <div className="grid sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Support phone</Label>
-              <Input defaultValue="+977 1 570 0000" />
+              <Label>Logo URL</Label>
+              <div className="flex gap-2">
+                <Input
+                  value={current.logoUrl ?? ''}
+                  onChange={(e) => set('logoUrl', e.target.value)}
+                  placeholder="https://…"
+                />
+                {current.logoUrl && (
+                  <img src={current.logoUrl} alt="" className="h-9 w-9 rounded object-cover" />
+                )}
+              </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Support email</Label>
-              <Input defaultValue="namaste@himalcommerce.np" />
+              <Label>Banner URL (optional)</Label>
+              <Input
+                value={current.bannerUrl ?? ''}
+                onChange={(e) => set('bannerUrl', e.target.value)}
+                placeholder="https://… (storefront hero background)"
+              />
             </div>
           </div>
-          <Button onClick={() => toast.success('Settings saved')}>Save changes</Button>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Primary brand color</Label>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="color"
+                  value={current.primaryColor ?? '#9C1A1A'}
+                  onChange={(e) => set('primaryColor', e.target.value)}
+                  className="h-9 w-12 rounded border cursor-pointer"
+                />
+                <Input
+                  value={current.primaryColor ?? ''}
+                  onChange={(e) => set('primaryColor', e.target.value)}
+                  className="font-mono"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Accent color</Label>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="color"
+                  value={current.accentColor ?? '#E8B547'}
+                  onChange={(e) => set('accentColor', e.target.value)}
+                  className="h-9 w-12 rounded border cursor-pointer"
+                />
+                <Input
+                  value={current.accentColor ?? ''}
+                  onChange={(e) => set('accentColor', e.target.value)}
+                  className="font-mono"
+                />
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Payment methods */}
+      {/* Contact info */}
+      <Card className="border-border/60">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Wallet className="h-4 w-4 text-primary" /> Contact information
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Owner name</Label>
+              <Input
+                value={current.ownerName ?? ''}
+                onChange={(e) => set('ownerName', e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Owner phone</Label>
+              <Input
+                value={current.ownerPhone ?? ''}
+                onChange={(e) => set('ownerPhone', e.target.value)}
+                placeholder="9801234567"
+              />
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Owner email</Label>
+              <Input
+                type="email"
+                value={current.ownerEmail ?? ''}
+                onChange={(e) => set('ownerEmail', e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Storefront support phone</Label>
+              <Input
+                value={current.supportPhone ?? ''}
+                onChange={(e) => set('supportPhone', e.target.value)}
+                placeholder="+977 1 4123 456"
+              />
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Storefront support email</Label>
+              <Input
+                type="email"
+                value={current.supportEmail ?? ''}
+                onChange={(e) => set('supportEmail', e.target.value)}
+                placeholder="namaste@yourstore.np"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Business address</Label>
+              <Input
+                value={current.address ?? ''}
+                onChange={(e) => set('address', e.target.value)}
+                placeholder="Patan Dhoka, Lalitpur 44600, Nepal"
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Social media */}
+      <Card className="border-border/60">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Share2 className="h-4 w-4 text-primary" /> Social media
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            These links appear in your storefront footer. Leave blank to hide an icon.
+          </p>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {SOCIALS.map((s) => (
+              <div key={s.key} className="space-y-1.5">
+                <Label>{s.label}</Label>
+                <Input
+                  value={(current[s.key] as string) ?? ''}
+                  onChange={(e) => set(s.key, e.target.value)}
+                  placeholder={s.placeholder}
+                />
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Payment methods (informational — toggle support is a Phase 2 feature) */}
       <Card className="border-border/60">
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
@@ -82,9 +291,9 @@ export function AdminSettings() {
         </CardHeader>
         <CardContent className="space-y-3">
           {[
-            { id: 'cod', name: 'Cash on Delivery', note: 'Pay with cash on arrival. Most popular in Nepal.', icon: Banknote, enabled: true, popular: true },
-            { id: 'esewa', name: 'eSewa', note: "Nepal's #1 digital wallet", icon: Wallet, enabled: true, popular: true },
-            { id: 'khalti', name: 'Khalti', note: 'Digital wallet + mobile banking + connect IPS', icon: Wallet, enabled: true, popular: false },
+            { id: 'cod', name: 'Cash on Delivery', note: 'Pay with cash on arrival. Most popular in Nepal.', icon: Banknote, popular: true },
+            { id: 'esewa', name: 'eSewa', note: "Nepal's #1 digital wallet", icon: Wallet, popular: true },
+            { id: 'khalti', name: 'Khalti', note: 'Digital wallet + mobile banking + connect IPS', icon: Wallet, popular: false },
           ].map((p) => (
             <div key={p.id} className="flex items-center justify-between rounded-lg border p-3">
               <div className="flex items-center gap-3">
@@ -99,16 +308,18 @@ export function AdminSettings() {
                   <p className="text-xs text-muted-foreground">{p.note}</p>
                 </div>
               </div>
-              <Switch defaultChecked={p.enabled} />
+              <Badge variant="outline" className="text-[10px]">Enabled</Badge>
             </div>
           ))}
           <p className="text-xs text-muted-foreground pt-1">
-            eSewa merchant ID: <span className="font-mono">HC-ES-2024</span> · Khalti API key: <span className="font-mono">live_khal_••••</span>
+            Digital payments (eSewa, Khalti) are marked <strong>pending</strong> on checkout
+            and must be confirmed manually in the Orders panel until gateway credentials
+            are configured. Cash on Delivery remains <strong>unpaid</strong> until collected.
           </p>
         </CardContent>
       </Card>
 
-      {/* Shipping */}
+      {/* Shipping info (informational — full zone editor is a Phase 2 feature) */}
       <Card className="border-border/60">
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
@@ -119,33 +330,27 @@ export function AdminSettings() {
           <div className="grid sm:grid-cols-3 gap-3">
             <div className="rounded-lg border p-3 space-y-1">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Kathmandu Valley</p>
-              <Input defaultValue="100" className="font-bold" />
-              <p className="text-[10px] text-muted-foreground">NPR · 1-2 days</p>
+              <p className="font-bold">रू 100</p>
+              <p className="text-[10px] text-muted-foreground">1-2 days</p>
             </div>
             <div className="rounded-lg border p-3 space-y-1">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Other districts</p>
-              <Input defaultValue="200" className="font-bold" />
-              <p className="text-[10px] text-muted-foreground">NPR · 2-5 days</p>
+              <p className="font-bold">रू 200</p>
+              <p className="text-[10px] text-muted-foreground">2-5 days</p>
             </div>
             <div className="rounded-lg border p-3 space-y-1">
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Karnali / Sudurpashchim</p>
-              <Input defaultValue="350" className="font-bold" />
-              <p className="text-[10px] text-muted-foreground">NPR · 4-8 days</p>
+              <p className="font-bold">रू 300-350</p>
+              <p className="text-[10px] text-muted-foreground">4-8 days</p>
             </div>
           </div>
-          <Separator />
-          <div className="flex items-center justify-between">
-            <div>
-              <Label>Free shipping over</Label>
-              <p className="text-xs text-muted-foreground">Inside Kathmandu Valley only</p>
-            </div>
-            <Input defaultValue="5000" className="w-32" />
-          </div>
-          <Button onClick={() => toast.success('Shipping rates saved')}>Save shipping rates</Button>
+          <p className="text-xs text-muted-foreground pt-1">
+            Rates are currently platform defaults. Per-store custom shipping zones are coming soon.
+          </p>
         </CardContent>
       </Card>
 
-      {/* Localization */}
+      {/* Localization (informational) */}
       <Card className="border-border/60">
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
@@ -156,59 +361,16 @@ export function AdminSettings() {
           <div className="grid sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Default language</Label>
-              <Input defaultValue="English" disabled />
+              <Input value="English" disabled />
             </div>
             <div className="space-y-1.5">
               <Label>Additional language</Label>
-              <Input defaultValue="नेपाली (Nepali)" disabled />
+              <Input value="नेपाली (Nepali)" disabled />
             </div>
           </div>
-          <div className="flex items-center justify-between rounded-lg border p-3">
-            <div>
-              <Label>Show Nepali translation on storefront</Label>
-              <p className="text-xs text-muted-foreground">Display product names and key UI in Nepali alongside English</p>
-            </div>
-            <Switch defaultChecked />
-          </div>
-          <div className="flex items-center justify-between rounded-lg border p-3">
-            <div>
-              <Label>Use Nepali numbering format</Label>
-              <p className="text-xs text-muted-foreground">रू 12,34,567 instead of रू 1,234,567</p>
-            </div>
-            <Switch defaultChecked />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Notifications */}
-      <Card className="border-border/60">
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <Bell className="h-4 w-4 text-primary" /> Notifications
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex items-center justify-between rounded-lg border p-3">
-            <div>
-              <Label>New order SMS alert</Label>
-              <p className="text-xs text-muted-foreground">Send SMS to store owner on every new order</p>
-            </div>
-            <Switch defaultChecked />
-          </div>
-          <div className="flex items-center justify-between rounded-lg border p-3">
-            <div>
-              <Label>Customer order confirmation via SMS</Label>
-              <p className="text-xs text-muted-foreground">Auto-SMS customer when order is placed (Ncell / NTC)</p>
-            </div>
-            <Switch defaultChecked />
-          </div>
-          <div className="flex items-center justify-between rounded-lg border p-3">
-            <div>
-              <Label>Low inventory alert</Label>
-              <p className="text-xs text-muted-foreground">Email when any product drops below 5 units</p>
-            </div>
-            <Switch defaultChecked />
-          </div>
+          <p className="text-xs text-muted-foreground pt-1">
+            Multi-language storefront support is on the roadmap.
+          </p>
         </CardContent>
       </Card>
 
@@ -219,14 +381,11 @@ export function AdminSettings() {
             <Mountain className="h-4 w-4 text-primary" /> About this build
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Himal Commerce v0.1 — a Nepal-localized headless commerce platform inspired by Medusa.
+            Himal Commerce v0.3 — a Nepal-localized multi-tenant commerce platform inspired by Medusa.
             Built with Next.js 16, Prisma, and Tailwind CSS. Uses NPR currency, supports eSewa/Khalti/COD
             payments, ships to all 77 districts of Nepal. Currency is stored in paisa (1 NPR = 100 paisa)
             to avoid floating-point rounding.
           </p>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1">
-            <ShieldCheck className="h-3.5 w-3.5" /> Open-source inspired · MIT-friendly
-          </div>
         </CardContent>
       </Card>
     </div>

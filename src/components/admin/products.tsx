@@ -36,7 +36,7 @@ import {
 import { formatNPR } from '@/lib/nepal'
 import type { Product, Category } from '@/lib/types'
 import { useCurrentStore } from '@/lib/use-current-store'
-import { Plus, Search, Pencil, Trash2, Package, MapPin, Hammer, Eye, EyeOff } from 'lucide-react'
+import { Plus, Search, Pencil, Trash2, Package, MapPin, Hammer, Eye, EyeOff, X, GripVertical } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   AlertDialog,
@@ -283,10 +283,12 @@ function ProductFormDialog({
     compareAt: '',
     sku: '',
     inventory: '0',
+    weightGrams: '',
     origin: '',
     isHandmade: false,
     status: 'published',
     categoryId: '',
+    variants: [] as VariantForm[],
   })
 
   const createMut = useMutation({
@@ -300,7 +302,15 @@ function ProductFormDialog({
           price: Number(form.price),
           compareAt: form.compareAt ? Number(form.compareAt) : null,
           inventory: Number(form.inventory),
+          weightGrams: form.weightGrams ? Number(form.weightGrams) : null,
           categoryId: form.categoryId || null,
+          variants: form.variants.filter(v => v.title.trim()).map(v => ({
+            title: v.title,
+            sku: v.sku || null,
+            price: v.price ? Number(v.price) : null,
+            inventory: Number(v.inventory) || 0,
+            attributes: v.attributes,
+          })),
         }),
       })
       if (!res.ok) throw new Error('Failed')
@@ -361,10 +371,33 @@ function ProductFormSheet({
     compareAt: product.compareAt ? String(product.compareAt / 100) : '',
     sku: product.sku || '',
     inventory: String(product.inventory),
+    weightGrams: product.weightGrams ? String(product.weightGrams) : '',
     origin: product.origin || '',
     isHandmade: product.isHandmade,
     status: product.status,
     categoryId: product.categoryId || '',
+    variants: (product.variants ?? []).map(v => ({
+      id: v.id,
+      title: v.title,
+      sku: v.sku || '',
+      price: v.price ? String(v.price / 100) : '',
+      inventory: String(v.inventory),
+      attributes: v.attributes || {},
+    })) as VariantForm[],
+  })
+
+  // Fetch fresh product with variants when sheet opens (in case list view didn't include them)
+  useQuery({
+    queryKey: ['product', product.id, open],
+    queryFn: async () => {
+      const res = await fetch(`/api/products/${product.id}`)
+      if (!res.ok) return null
+      const data = await res.json()
+      return data.product as Product & { variants: VariantForm[] }
+    },
+    enabled: open,
+    staleTime: 0,
+    refetchOnMount: true,
   })
 
   const updateMut = useMutation({
@@ -377,7 +410,17 @@ function ProductFormSheet({
           price: Number(form.price),
           compareAt: form.compareAt ? Number(form.compareAt) : null,
           inventory: Number(form.inventory),
+          weightGrams: form.weightGrams ? Number(form.weightGrams) : null,
           categoryId: form.categoryId || null,
+          variants: form.variants.map(v => ({
+            ...(v.id ? { id: v.id } : {}),
+            title: v.title,
+            sku: v.sku || null,
+            price: v.price ? Number(v.price) : null,
+            inventory: Number(v.inventory) || 0,
+            attributes: v.attributes,
+            ...(v._destroy ? { _destroy: true } : {}),
+          })),
         }),
       })
       if (!res.ok) throw new Error('Failed')
@@ -419,16 +462,28 @@ function ProductFormSheet({
 }
 
 // ---------- Shared form fields ----------
+type VariantForm = {
+  id?: string
+  title: string
+  sku: string
+  price: string // NPR — empty string means "use product price"
+  inventory: string
+  attributes: Record<string, string>
+  _destroy?: boolean
+}
+
 function ProductForm({
   form,
   setForm,
   categories,
 }: {
-  form: Record<string, string | boolean>
-  setForm: React.Dispatch<React.SetStateAction<Record<string, string | boolean>>>
+  form: Record<string, unknown>
+  setForm: React.Dispatch<React.SetStateAction<Record<string, unknown>>>
   categories: Category[]
 }) {
   const set = (k: string, v: string | boolean) => setForm((f) => ({ ...f, [k]: v }))
+  const variants = (form.variants as VariantForm[]) ?? []
+  const setVariants = (v: VariantForm[]) => setForm((f) => ({ ...f, variants: v }))
 
   return (
     <div className="space-y-3">
@@ -462,6 +517,7 @@ function ProductForm({
         <div className="space-y-1.5">
           <Label>Price (NPR) *</Label>
           <Input type="number" value={form.price as string} onChange={(e) => set('price', e.target.value)} placeholder="850" />
+          <p className="text-[11px] text-muted-foreground">Base price. Variants can override.</p>
         </div>
         <div className="space-y-1.5">
           <Label>Compare-at price (NPR)</Label>
@@ -476,6 +532,7 @@ function ProductForm({
         <div className="space-y-1.5">
           <Label>Inventory</Label>
           <Input type="number" value={form.inventory as string} onChange={(e) => set('inventory', e.target.value)} />
+          <p className="text-[11px] text-muted-foreground">Used when no variants, or as fallback.</p>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -484,18 +541,22 @@ function ProductForm({
           <Input value={form.origin as string} onChange={(e) => set('origin', e.target.value)} placeholder="Palpa" />
         </div>
         <div className="space-y-1.5">
-          <Label>Category</Label>
-          <Select value={form.categoryId as string} onValueChange={(v) => set('categoryId', v)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select category" />
-            </SelectTrigger>
-            <SelectContent>
-              {categories.map((c) => (
-                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Label>Weight (grams)</Label>
+          <Input type="number" value={(form.weightGrams as string) ?? ''} onChange={(e) => set('weightGrams', e.target.value)} placeholder="250" />
         </div>
+      </div>
+      <div className="space-y-1.5">
+        <Label>Category</Label>
+        <Select value={form.categoryId as string} onValueChange={(v) => set('categoryId', v)}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select category" />
+          </SelectTrigger>
+          <SelectContent>
+            {categories.map((c) => (
+              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
       <div className="space-y-1.5">
         <Label>Status</Label>
@@ -515,6 +576,185 @@ function ProductForm({
           <p className="text-xs text-muted-foreground">Show &quot;Handmade&quot; badge on storefront</p>
         </div>
         <Switch checked={form.isHandmade as boolean} onCheckedChange={(v) => set('isHandmade', v)} />
+      </div>
+
+      <VariantsEditor variants={variants} onChange={setVariants} />
+    </div>
+  )
+}
+
+// ---------- Variants editor ----------
+function VariantsEditor({
+  variants,
+  onChange,
+}: {
+  variants: VariantForm[]
+  onChange: (v: VariantForm[]) => void
+}) {
+  const visibleVariants = variants.filter((v) => !v._destroy)
+
+  const addVariant = () => {
+    onChange([
+      ...variants,
+      { title: '', sku: '', price: '', inventory: '0', attributes: {} },
+    ])
+  }
+
+  const updateVariant = (idx: number, patch: Partial<VariantForm>) => {
+    onChange(variants.map((v, i) => (i === idx ? { ...v, ...patch } : v)))
+  }
+
+  const removeVariant = (idx: number) => {
+    const v = variants[idx]
+    if (v.id) {
+      onChange(variants.map((vv, i) => (i === idx ? { ...vv, _destroy: true } : vv)))
+    } else {
+      onChange(variants.filter((_, i) => i !== idx))
+    }
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg border p-3 bg-secondary/20">
+      <div className="flex items-center justify-between">
+        <div>
+          <Label className="text-sm font-semibold">Variants</Label>
+          <p className="text-[11px] text-muted-foreground">
+            Optional — for size, color, or weight options. If empty, the product is sold as-is.
+          </p>
+        </div>
+        <Button type="button" size="sm" variant="outline" onClick={addVariant}>
+          <Plus className="h-3.5 w-3.5 mr-1" />
+          Add variant
+        </Button>
+      </div>
+      {visibleVariants.length === 0 ? (
+        <p className="text-xs text-muted-foreground/70 italic py-2">
+          No variants. Product uses the base price and inventory shown above.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {visibleVariants.map((v, idx) => (
+            <div key={idx} className="rounded-md border bg-background p-2.5 space-y-2">
+              <div className="flex items-start gap-2">
+                <GripVertical className="h-4 w-4 text-muted-foreground/40 mt-2 shrink-0" />
+                <div className="flex-1 grid grid-cols-2 gap-2">
+                  <Input
+                    placeholder="Variant label (e.g. Red / Large, 250g, Size 8)"
+                    value={v.title}
+                    onChange={(e) => updateVariant(idx, { title: e.target.value })}
+                    className="text-sm"
+                  />
+                  <Input
+                    placeholder="SKU (optional)"
+                    value={v.sku}
+                    onChange={(e) => updateVariant(idx, { sku: e.target.value })}
+                    className="text-sm font-mono"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 text-destructive hover:text-destructive shrink-0"
+                  onClick={() => removeVariant(idx)}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pl-6">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground w-12 shrink-0">NPR</span>
+                  <Input
+                    type="number"
+                    placeholder="use base"
+                    value={v.price}
+                    onChange={(e) => updateVariant(idx, { price: e.target.value })}
+                    className="text-sm h-8"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground w-12 shrink-0">Stock</span>
+                  <Input
+                    type="number"
+                    placeholder="0"
+                    value={v.inventory}
+                    onChange={(e) => updateVariant(idx, { inventory: e.target.value })}
+                    className="text-sm h-8"
+                  />
+                </div>
+              </div>
+              <VariantAttributesEditor
+                attrs={v.attributes}
+                onChange={(attrs) => updateVariant(idx, { attributes: attrs })}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function VariantAttributesEditor({
+  attrs,
+  onChange,
+}: {
+  attrs: Record<string, string>
+  onChange: (a: Record<string, string>) => void
+}) {
+  const entries = Object.entries(attrs)
+  const [newKey, setNewKey] = useState('')
+  const [newValue, setNewValue] = useState('')
+
+  const add = () => {
+    if (!newKey.trim()) return
+    onChange({ ...attrs, [newKey.trim()]: newValue.trim() })
+    setNewKey('')
+    setNewValue('')
+  }
+  const remove = (k: string) => {
+    const next = { ...attrs }
+    delete next[k]
+    onChange(next)
+  }
+
+  return (
+    <div className="pl-6 space-y-1.5">
+      {entries.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {entries.map(([k, val]) => (
+            <span
+              key={k}
+              className="inline-flex items-center gap-1 text-[11px] bg-primary/10 text-primary px-1.5 py-0.5 rounded"
+            >
+              <span className="font-medium">{k}:</span> {val}
+              <button
+                type="button"
+                onClick={() => remove(k)}
+                className="hover:bg-primary/20 rounded p-0.5"
+              >
+                <X className="h-2.5 w-2.5" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-1.5">
+        <Input
+          placeholder="attribute (e.g. color, size, weight)"
+          value={newKey}
+          onChange={(e) => setNewKey(e.target.value)}
+          className="text-xs h-7"
+        />
+        <Input
+          placeholder="value (e.g. Red, L, 250g)"
+          value={newValue}
+          onChange={(e) => setNewValue(e.target.value)}
+          className="text-xs h-7"
+        />
+        <Button type="button" size="sm" variant="ghost" className="h-7" onClick={add} disabled={!newKey.trim()}>
+          <Plus className="h-3 w-3" />
+        </Button>
       </div>
     </div>
   )

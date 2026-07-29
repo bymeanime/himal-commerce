@@ -14,21 +14,43 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import type { Category } from '@/lib/types'
 
 export function StorefrontHeader() {
   const cartCount = useCart((s) => s.items.reduce((sum, i) => sum + i.quantity, 0))
   const openCart = useCart((s) => s.open)
   const setStoreSection = useUI((s) => s.setStoreSection)
+  const setSelectedCategorySlug = useUI((s) => s.setSelectedCategorySlug)
   const exitToPlatform = useUI((s) => s.exitToPlatform)
-  const { store } = useCurrentStore()
+  const { store, storeId } = useCurrentStore()
   const [menuOpen, setMenuOpen] = useState(false)
+
+  // Fetch categories for the nav
+  const { data: catData } = useQuery<{ categories: Category[] }>({
+    queryKey: ['categories', storeId],
+    queryFn: async () => (await fetch(`/api/categories?storeId=${storeId}`)).json(),
+    enabled: !!storeId,
+  })
+  const categories = catData?.categories ?? []
 
   const navItems = [
     { id: 'home' as const, label: 'Home' },
     { id: 'products' as const, label: 'Shop All' },
     { id: 'about' as const, label: 'About Himal' },
   ]
+
+  const goToCategory = (slug: string) => {
+    setSelectedCategorySlug(slug)
+    setStoreSection('category')
+  }
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border/60 bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
@@ -43,10 +65,12 @@ export function StorefrontHeader() {
             <span className="text-primary-foreground/40">·</span>
             <span className="truncate">Free shipping inside Kathmandu Valley on orders over रू 5,000</span>
           </p>
-          <p className="hidden sm:flex items-center gap-1.5 shrink-0">
-            <Phone className="h-3 w-3" />
-            <span>+977 1 570 0000</span>
-          </p>
+          {store?.supportPhone && (
+            <p className="hidden sm:flex items-center gap-1.5 shrink-0">
+              <Phone className="h-3 w-3" />
+              <span>{store.supportPhone}</span>
+            </p>
+          )}
         </div>
       </div>
 
@@ -73,7 +97,7 @@ export function StorefrontHeader() {
           )}
         </div>
 
-        {/* Desktop nav */}
+        {/* Desktop nav — main items + categories dropdown */}
         <nav className="hidden md:flex items-center gap-1">
           {navItems.map((item) => (
             <Button
@@ -86,6 +110,22 @@ export function StorefrontHeader() {
               {item.label}
             </Button>
           ))}
+          {categories.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="text-foreground/80 hover:text-foreground">
+                  Categories
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                {categories.map((c) => (
+                  <DropdownMenuItem key={c.id} onClick={() => goToCategory(c.slug)}>
+                    {c.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </nav>
 
         <div className="flex items-center gap-2">
@@ -122,7 +162,7 @@ export function StorefrontHeader() {
                 <Menu className="h-4 w-4" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-72">
+            <SheetContent side="right" className="w-72 overflow-y-auto">
               <SheetHeader>
                 <SheetTitle>
                   <Logo size="sm" />
@@ -139,6 +179,24 @@ export function StorefrontHeader() {
                     {item.label}
                   </Button>
                 ))}
+                {categories.length > 0 && (
+                  <>
+                    <div className="px-3 pt-3 pb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                      Categories
+                    </div>
+                    {categories.map((c) => (
+                      <Button
+                        key={c.id}
+                        variant="ghost"
+                        size="sm"
+                        className="justify-start text-sm text-foreground/70"
+                        onClick={() => { goToCategory(c.slug); setMenuOpen(false) }}
+                      >
+                        {c.name}
+                      </Button>
+                    ))}
+                  </>
+                )}
                 <div className="my-2 border-t" />
                 <Button
                   variant="outline"
