@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "node scripts/vercel-build.js",
+  "installCommand": "bun install",
+  "outputDirectory": ".next",
+  "github": {
+    "silent": false
+  },
+  "env": {
+    "DATABASE_PROVIDER": "postgresql",
+    "NEXT_TELEMETRY_DISABLED": "1"
+  }
+}
