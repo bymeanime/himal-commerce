@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/sheet'
 import { formatNPR } from '@/lib/nepal'
 import type { Order } from '@/lib/types'
+import { useCurrentStore } from '@/lib/use-current-store'
 import {
   ShoppingCart,
   Phone,
@@ -56,17 +57,19 @@ const PAYMENT_ICONS: Record<string, React.ComponentType<{ className?: string }>>
 
 export function AdminOrders() {
   const qc = useQueryClient()
+  const { storeId } = useCurrentStore()
   const [statusFilter, setStatusFilter] = useState('all')
   const [selected, setSelected] = useState<Order | null>(null)
 
   const { data, isLoading } = useQuery<{ orders: Order[] }>({
-    queryKey: ['orders', statusFilter],
+    queryKey: ['orders', storeId, statusFilter],
     queryFn: async () => {
-      const params = new URLSearchParams()
+      const params = new URLSearchParams({ storeId: storeId! })
       if (statusFilter !== 'all') params.set('status', statusFilter)
       const res = await fetch(`/api/orders?${params}`)
       return res.json()
     },
+    enabled: !!storeId,
   })
 
   const updateMut = useMutation({
@@ -91,6 +94,10 @@ export function AdminOrders() {
   })
 
   const orders = data?.orders ?? []
+
+  if (!storeId) {
+    return <div className="p-6 text-muted-foreground">No store selected.</div>
+  }
 
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-7xl">

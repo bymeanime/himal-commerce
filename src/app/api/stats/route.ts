@@ -1,8 +1,69 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// GET /api/stats — dashboard overview
-export async function GET() {
+// GET /api/stats?storeId=xxx  → per-store dashboard
+// GET /api/stats?platform=true → super-admin cross-store dashboard
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url)
+  const storeId = searchParams.get('storeId')
+  const platform = searchParams.get('platform') === 'true'
+
+  // ====== Platform super-admin stats ======
+  if (platform) {
+    const [totalStores, totalOrders, totalProducts, totalCustomers, totalRevenueAgg, stores] = await Promise.all([
+      db.store.count(),
+      db.order.count(),
+      db.product.count(),
+      db.customer.count(),
+      db.order.aggregate({ _sum: { total: true }, where: { paymentStatus: 'paid' } }),
+      db.store.findMany({
+        include: {
+          _count: { select: { products: true, orders: true, customers: true } },
+        },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ])
+
+    // Per-store revenue
+    const revenueByStore = await db.order.groupBy({
+      by: ['storeId'],
+      _sum: { total: true },
+      where: { paymentStatus: 'paid' },
+    })
+    const revMap = new Map(revenueByStore.map((r) => [r.storeId, r._sum.total || 0]))
+
+    const storeStats = stores.map((s) => ({
+      id: s.id,
+      name: s.name,
+      slug: s.slug,
+      logoUrl: s.logoUrl,
+      plan: s.plan,
+      status: s.status,
+      ownerName: s.ownerName,
+      createdAt: s.createdAt,
+      productCount: s._count.products,
+      orderCount: s._count.orders,
+      customerCount: s._count.customers,
+      revenue: revMap.get(s.id) || 0,
+    }))
+
+    return NextResponse.json({
+      totals: {
+        stores: totalStores,
+        orders: totalOrders,
+        products: totalProducts,
+        customers: totalCustomers,
+        revenue: totalRevenueAgg._sum.total || 0,
+      },
+      stores: storeStats,
+    })
+  }
+
+  // ====== Per-store stats ======
+  if (!storeId) {
+    return NextResponse.json({ error: 'storeId is required (or use ?platform=true)' }, { status: 400 })
+  }
+
   const [
     totalOrders,
     totalProducts,
@@ -13,12 +74,13 @@ export async function GET() {
     topProductsRaw,
     last7DaysOrders,
   ] = await Promise.all([
-    db.order.count(),
-    db.product.count(),
-    db.customer.count(),
-    db.order.count({ where: { status: 'pending' } }),
-    db.order.count({ where: { status: 'delivered' } }),
+    db.order.count({ where: { storeId } }),
+    db.product.count({ where: { storeId } }),
+    db.customer.count({ where: { storeId } }),
+    db.order.count({ where: { storeId, status: 'pending' } }),
+    db.order.count({ where: { storeId, status: 'delivered' } }),
     db.order.findMany({
+      where: { storeId },
       take: 6,
       orderBy: { createdAt: 'desc' },
       include: { items: true },
@@ -26,21 +88,21 @@ export async function GET() {
     db.orderItem.groupBy({
       by: ['title', 'thumbnail'],
       _sum: { quantity: true },
+      where: { order: { storeId } },
       orderBy: { _sum: { quantity: 'desc' } },
       take: 5,
     }),
     db.order.findMany({
-      where: { createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
+      where: { storeId, createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
       select: { total: true, createdAt: true, status: true, paymentStatus: true },
     }),
   ])
 
   const totalRevenue = await db.order.aggregate({
     _sum: { total: true },
-    where: { paymentStatus: 'paid' },
+    where: { storeId, paymentStatus: 'paid' },
   })
 
-  // Group orders by day for the last 7 days
   const days: { date: string; revenue: number; orders: number }[] = []
   for (let i = 6; i >= 0; i--) {
     const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000)
@@ -57,6 +119,7 @@ export async function GET() {
   }
 
   const categories = await db.category.findMany({
+    where: { storeId },
     include: { _count: { select: { products: true } } },
   })
 

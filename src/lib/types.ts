@@ -1,7 +1,26 @@
 // Shared types matching the Prisma models
 
+export type Store = {
+  id: string
+  name: string
+  slug: string
+  description: string | null
+  logoUrl: string | null
+  primaryColor: string
+  accentColor: string
+  currency: string
+  ownerName: string
+  ownerEmail: string | null
+  ownerPhone: string | null
+  status: 'active' | 'suspended' | 'draft'
+  plan: 'free' | 'pro' | 'enterprise'
+  createdAt: string
+  updatedAt: string
+}
+
 export type Product = {
   id: string
+  storeId: string
   title: string
   subtitle: string | null
   description: string
@@ -9,7 +28,6 @@ export type Product = {
   price: number // paisa
   compareAt: number | null
   sku: string | null
-  barcode: string | null
   status: 'draft' | 'published'
   inventory: number
   weightGrams: number | null
@@ -23,6 +41,7 @@ export type Product = {
 
 export type Category = {
   id: string
+  storeId: string
   name: string
   slug: string
   icon: string | null
@@ -40,6 +59,7 @@ export type OrderItem = {
 
 export type Order = {
   id: string
+  storeId: string
   orderNumber: string
   status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled'
   fulfillment: 'unfulfilled' | 'fulfilled' | 'returned'
@@ -65,6 +85,7 @@ export type Order = {
 
 export type Customer = {
   id: string
+  storeId: string
   name: string
   phone: string
   email: string | null
@@ -78,6 +99,7 @@ export type Customer = {
 // Cart line item — what gets added to the cart
 export type CartItem = {
   productId: string
+  storeId: string // Cart items are scoped to a single store
   title: string
   thumbnail: string | null
   price: number // paisa

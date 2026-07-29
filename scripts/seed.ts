@@ -1,121 +1,176 @@
 import { db } from '../src/lib/db'
-import { SEED_CATEGORIES, SEED_PRODUCTS } from '../src/lib/nepal'
+import { SEED_STORES, SEED_CATEGORIES_BY_STORE, SEED_PRODUCTS } from '../src/lib/nepal'
+import { calcShippingCost, getProvince } from '../src/lib/nepal'
 
 async function seed() {
-  console.log('Seeding Himal Commerce database...')
+  console.log('Seeding Himal Commerce multi-store platform...\n')
 
-  // Clear existing
+  // Clear
   await db.orderItem.deleteMany()
   await db.order.deleteMany()
   await db.customer.deleteMany()
   await db.product.deleteMany()
   await db.category.deleteMany()
+  await db.storeMember.deleteMany()
+  await db.store.deleteMany()
+  await db.user.deleteMany()
 
-  // Categories
-  const catMap = new Map<string, string>()
-  for (const c of SEED_CATEGORIES) {
-    const cat = await db.category.create({ data: { name: c.name, slug: c.slug, icon: c.icon } })
-    catMap.set(c.slug, cat.id)
-    console.log(`  + Category: ${c.name}`)
+  // ====== Create stores ======
+  const storeMap = new Map<string, { id: string; slug: string }>()
+  for (const s of SEED_STORES) {
+    const store = await db.store.create({
+      data: {
+        name: s.name,
+        slug: s.slug,
+        description: s.description,
+        logoUrl: s.logoUrl,
+        primaryColor: s.primaryColor,
+        accentColor: s.accentColor,
+        currency: s.currency,
+        ownerName: s.ownerName,
+        ownerEmail: s.ownerEmail,
+        ownerPhone: s.ownerPhone,
+        plan: s.plan,
+        status: 'active',
+      },
+    })
+    storeMap.set(s.slug, { id: store.id, slug: s.slug })
+    console.log(`  + Store: ${s.name} (${s.slug})`)
+
+    // Create owner user + membership
+    const user = await db.user.create({
+      data: { email: s.ownerEmail!, name: s.ownerName },
+    })
+    await db.storeMember.create({
+      data: { userId: user.id, storeId: store.id, role: 'owner' },
+    })
   }
 
-  // Products
+  // ====== Create categories per store ======
+  for (const [storeSlug, cats] of Object.entries(SEED_CATEGORIES_BY_STORE)) {
+    const store = storeMap.get(storeSlug)!
+    for (const c of cats) {
+      await db.category.create({
+        data: { name: c.name, slug: c.slug, icon: c.icon, storeId: store.id },
+      })
+    }
+    console.log(`  + ${cats.length} categories for ${storeSlug}`)
+  }
+
+  // ====== Create products ======
   for (const p of SEED_PRODUCTS) {
+    const store = storeMap.get(p.storeSlug)!
+    const category = await db.category.findFirst({
+      where: { storeId: store.id, slug: p.categorySlug },
+    })
+    if (!category) {
+      console.warn(`  ! Category ${p.categorySlug} not found for store ${p.storeSlug}`)
+      continue
+    }
     await db.product.create({
       data: {
+        storeId: store.id,
         title: p.title,
         subtitle: p.subtitle,
         description: p.description,
         thumbnail: p.thumbnail,
-        price: p.price * 100, // convert NPR to paisa
+        price: p.price * 100, // NPR → paisa
         compareAt: p.compareAt ? p.compareAt * 100 : null,
         sku: p.sku,
         status: 'published',
         inventory: p.inventory,
         origin: p.origin,
         isHandmade: p.isHandmade,
-        categoryId: catMap.get(p.categorySlug)!,
+        categoryId: category.id,
       },
     })
-    console.log(`  + Product: ${p.title}`)
   }
+  console.log(`  + ${SEED_PRODUCTS.length} products across all stores`)
 
-  // Seed a few sample customers + orders so admin dashboard isn't empty
-  const customers = [
+  // ====== Create sample customers + orders per store ======
+  const sampleCustomers = [
     { name: 'Bishnu Prasad Sharma', phone: '9801234567', email: 'bishnu@example.com', city: 'Kathmandu', district: 'Kathmandu', address: 'Baneshwor, Kathmandu' },
     { name: 'Sita Gurung', phone: '9852345678', email: 'sita@example.com', city: 'Pokhara', district: 'Kaski', address: 'Lakeside, Pokhara' },
     { name: 'Ramesh Tamang', phone: '9863456789', city: 'Lalitpur', district: 'Lalitpur', address: 'Pulchowk, Lalitpur' },
     { name: 'Anjali Maharjan', phone: '9874567890', email: 'anjali@example.com', city: 'Bhaktapur', district: 'Bhaktapur', address: 'Durbar Square, Bhaktapur' },
+    { name: 'Dipak Thapa', phone: '9885678901', email: 'dipak@example.com', city: 'Dharan', district: 'Sunsari', address: 'Chata Chowk, Dharan' },
+    { name: 'Gita Limbu', phone: '9896789012', city: 'Ilam', district: 'Ilam', address: 'Ilam Bazaar, Ilam' },
   ]
 
-  const createdCustomers = []
-  for (const c of customers) {
-    const cust = await db.customer.create({ data: c })
-    createdCustomers.push(cust)
-    console.log(`  + Customer: ${c.name}`)
-  }
-
-  // Create a few sample orders spread across recent days
-  const allProducts = await db.product.findMany()
+  let orderCounter = 0
   const statuses = ['pending', 'processing', 'shipped', 'delivered', 'delivered']
   const paymentMethods = ['cod', 'esewa', 'khalti', 'cod', 'esewa']
 
-  for (let i = 0; i < 8; i++) {
-    const cust = createdCustomers[i % createdCustomers.length]
-    const prod1 = allProducts[i % allProducts.length]
-    const prod2 = allProducts[(i + 3) % allProducts.length]
+  for (const [storeSlug, storeInfo] of storeMap.entries()) {
+    const storeProducts = await db.product.findMany({ where: { storeId: storeInfo.id } })
+    if (storeProducts.length === 0) continue
 
-    const items = [
-      { productId: prod1.id, title: prod1.title, thumbnail: prod1.thumbnail, price: prod1.price, quantity: 1 + (i % 3) },
-      { productId: prod2.id, title: prod2.title, thumbnail: prod2.thumbnail, price: prod2.price, quantity: 1 },
-    ]
-    const subtotal = items.reduce((sum, it) => sum + it.price * it.quantity, 0)
-    const shippingCost = 100 * 100 // Rs 100 in KTM
-    const total = subtotal + shippingCost
+    // Pick 2-3 customers for this store
+    const storeCustomers = sampleCustomers.slice(0, 3 + (Math.floor(Math.random() * 2)))
 
-    const status = statuses[i % statuses.length]
-    const paymentStatus = status === 'delivered' ? 'paid' : (i % 3 === 0 ? 'paid' : 'unpaid')
+    for (let i = 0; i < storeCustomers.length; i++) {
+      const c = storeCustomers[i]
+      const customer = await db.customer.create({
+        data: { ...c, storeId: storeInfo.id },
+      })
 
-    // Spread across the last 14 days
-    const daysAgo = Math.floor(i * 1.5)
-    const createdAt = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000)
+      // 1-2 orders per customer
+      const orderCount = 1 + (i % 2)
+      for (let j = 0; j < orderCount; j++) {
+        orderCounter++
+        const prod1 = storeProducts[(i + j) % storeProducts.length]
+        const prod2 = storeProducts[(i + j + 2) % storeProducts.length]
 
-    const order = await db.order.create({
-      data: {
-        orderNumber: `HC-${String(2024000 + i + 1)}`,
-        status,
-        customerId: cust.id,
-        customerName: cust.name,
-        customerPhone: cust.phone,
-        customerEmail: cust.email,
-        shippingAddress: cust.address!,
-        shippingCity: cust.city!,
-        shippingDistrict: cust.district!,
-        shippingZone: 'Bagmati',
-        paymentMethod: paymentMethods[i % paymentMethods.length],
-        paymentStatus,
-        subtotal,
-        shippingCost,
-        total,
-        items: { create: items },
-        createdAt,
-      },
-    })
-    console.log(`  + Order: ${order.orderNumber} (${order.status})`)
+        const items = [
+          { productId: prod1.id, title: prod1.title, thumbnail: prod1.thumbnail, price: prod1.price, quantity: 1 + (j % 2) },
+          ...(prod2 ? [{ productId: prod2.id, title: prod2.title, thumbnail: prod2.thumbnail, price: prod2.price, quantity: 1 }] : []),
+        ]
+        const subtotal = items.reduce((sum, it) => sum + it.price * it.quantity, 0)
+        const shippingCost = calcShippingCost(c.district)
+        const total = subtotal + shippingCost
+
+        const status = statuses[(i + j) % statuses.length]
+        const paymentStatus = status === 'delivered' ? 'paid' : ((i + j) % 3 === 0 ? 'paid' : 'unpaid')
+        const province = getProvince(c.district) || 'Bagmati'
+
+        const daysAgo = Math.floor(orderCounter * 1.5)
+        const createdAt = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000)
+
+        await db.order.create({
+          data: {
+            storeId: storeInfo.id,
+            orderNumber: `HC-${storeSlug.slice(0, 2).toUpperCase()}-${String(1000 + orderCounter)}`,
+            status,
+            customerId: customer.id,
+            customerName: c.name,
+            customerPhone: c.phone,
+            customerEmail: c.email,
+            shippingAddress: c.address,
+            shippingCity: c.city,
+            shippingDistrict: c.district,
+            shippingZone: province,
+            paymentMethod: paymentMethods[(i + j) % paymentMethods.length],
+            paymentStatus,
+            subtotal,
+            shippingCost,
+            total,
+            items: { create: items },
+            createdAt,
+          },
+        })
+      }
+    }
   }
+  console.log(`  + ${orderCounter} orders across all stores`)
 
-  console.log('\nSeed complete!')
-  console.log(`  ${SEED_CATEGORIES.length} categories`)
+  console.log('\n✓ Seed complete!')
+  console.log(`  ${SEED_STORES.length} stores`)
+  console.log(`  ${Object.values(SEED_CATEGORIES_BY_STORE).flat().length} categories`)
   console.log(`  ${SEED_PRODUCTS.length} products`)
-  console.log(`  ${customers.length} customers`)
-  console.log(`  8 orders`)
+  console.log(`  ${sampleCustomers.length * 3} customers`)
+  console.log(`  ${orderCounter} orders`)
 }
 
 seed()
-  .catch((e) => {
-    console.error(e)
-    process.exit(1)
-  })
-  .finally(async () => {
-    await db.$disconnect()
-  })
+  .catch((e) => { console.error(e); process.exit(1) })
+  .finally(async () => { await db.$disconnect() })

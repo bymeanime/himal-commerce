@@ -1,5 +1,6 @@
 'use client'
 
+import { Platform } from '@/components/platform/platform'
 import { Storefront } from '@/components/storefront/storefront'
 import { Admin } from '@/components/admin/admin'
 import { useUI } from '@/lib/ui-store'
@@ -7,28 +8,46 @@ import { useEffect } from 'react'
 
 export default function Home() {
   const view = useUI((s) => s.view)
+  const currentStoreId = useUI((s) => s.currentStoreId)
 
-  // Sync hash with view so the back button feels natural
+  // Sync URL hash with view + store for natural back-button behavior
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const hash = window.location.hash.replace('#', '')
-    if (hash === 'admin' && view !== 'admin') {
-      useUI.setState({ view: 'admin' })
+    const hash = window.location.hash.replace(/^#/, '')
+    // Parse: "platform" or "store/{id}/storefront" or "store/{id}/admin"
+    if (hash === 'platform' && view !== 'platform') {
+      useUI.setState({ view: 'platform', currentStoreId: null })
+      return
+    }
+    const m = hash.match(/^store\/([^/]+)\/(storefront|admin)$/)
+    if (m) {
+      const [, sid, v] = m
+      if (currentStoreId !== sid || view !== v) {
+        useUI.setState({ currentStoreId: sid, view: v as 'storefront' | 'admin' })
+      }
     }
   }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-    const newHash = view === 'admin' ? '#admin' : ''
-    if (window.location.hash !== newHash) {
-      window.history.replaceState(null, '', window.location.pathname + newHash)
+    let newHash = 'platform'
+    if (view !== 'platform' && currentStoreId) {
+      newHash = `store/${currentStoreId}/${view}`
     }
-  }, [view])
+    if (window.location.hash !== `#${newHash}`) {
+      window.history.replaceState(null, '', window.location.pathname + (newHash === 'platform' ? '' : `#${newHash}`))
+    }
+  }, [view, currentStoreId])
 
-  // Scroll to top when switching views
   useEffect(() => {
     if (typeof window !== 'undefined') window.scrollTo(0, 0)
-  }, [view])
+  }, [view, currentStoreId])
 
-  return view === 'admin' ? <Admin /> : <Storefront />
+  if (view === 'platform' || !currentStoreId) {
+    return <Platform />
+  }
+  if (view === 'admin') {
+    return <Admin />
+  }
+  return <Storefront />
 }

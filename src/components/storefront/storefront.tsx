@@ -9,12 +9,30 @@ import { ProductDetailDrawer } from './product-detail-drawer'
 import { CartDrawer } from './cart-drawer'
 import { CheckoutModal } from './checkout-modal'
 import { useUI } from '@/lib/ui-store'
+import { useCurrentStore } from '@/lib/use-current-store'
 import { Button } from '@/components/ui/button'
-import { Mountain, Sparkles } from 'lucide-react'
+import { Mountain, Sparkles, ArrowLeft } from 'lucide-react'
 
 export function Storefront() {
   const section = useUI((s) => s.storeSection)
   const setSection = useUI((s) => s.setStoreSection)
+  const exitToPlatform = useUI((s) => s.exitToPlatform)
+  const { store, storeId } = useCurrentStore()
+
+  // Safety: if no store selected, bounce to platform
+  if (!storeId || !store) {
+    return (
+      <div className="min-h-screen grid place-items-center bg-background p-6">
+        <div className="text-center space-y-3">
+          <Mountain className="h-10 w-10 text-primary mx-auto" />
+          <p className="text-sm text-muted-foreground">No store selected.</p>
+          <Button onClick={exitToPlatform}>
+            <ArrowLeft className="h-4 w-4 mr-1" /> Back to all stores
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-background">

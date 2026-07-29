@@ -8,13 +8,13 @@ export async function GET(_req: NextRequest, { params }: Params) {
   const { id } = await params
   const order = await db.order.findUnique({
     where: { id },
-    include: { items: true, customer: true },
+    include: { items: true, customer: true, store: true },
   })
   if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
   return NextResponse.json({ order })
 }
 
-// PATCH /api/orders/[id] — update status, paymentStatus, fulfillment, notes
+// PATCH /api/orders/[id]
 export async function PATCH(req: NextRequest, { params }: Params) {
   const { id } = await params
   const body = await req.json()

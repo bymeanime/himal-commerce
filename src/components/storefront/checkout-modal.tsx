@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useCart } from '@/lib/cart-store'
 import { useUI } from '@/lib/ui-store'
+import { useCurrentStore } from '@/lib/use-current-store'
 import {
   Dialog,
   DialogContent,
@@ -44,6 +45,7 @@ export function CheckoutModal() {
   const setOpen = useUI((s) => s.setCheckoutOpen)
   const lastOrderNumber = useUI((s) => s.lastOrderNumber)
   const setLastOrderNumber = useUI((s) => s.setLastOrderNumber)
+  const { storeId } = useCurrentStore()
 
   const [step, setStep] = useState<Step>('shipping')
   const [submitting, setSubmitting] = useState(false)
@@ -98,6 +100,7 @@ export function CheckoutModal() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          storeId,
           customerName: form.name,
           customerPhone: form.phone,
           customerEmail: form.email || undefined,
@@ -134,6 +137,7 @@ export function CheckoutModal() {
   // Don't render if cart empty (except for success state where cart was just cleared)
   if (!isOpen) return null
   if (items.length === 0 && step !== 'success') return null
+  if (!storeId && step !== 'success') return null
 
   return (
     <Dialog open={isOpen} onOpenChange={(o) => !o && close()}>

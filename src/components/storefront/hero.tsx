@@ -4,9 +4,12 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Mountain, Truck, ShieldCheck, Wallet } from 'lucide-react'
 import { useUI } from '@/lib/ui-store'
+import { useCurrentStore } from '@/lib/use-current-store'
 
 export function Hero() {
   const setStoreSection = useUI((s) => s.setStoreSection)
+  const { store } = useCurrentStore()
+  const storeName = store?.name || 'Himal Commerce'
 
   return (
     <section className="relative overflow-hidden border-b border-border/60">
@@ -17,17 +20,25 @@ export function Hero() {
       <div className="relative mx-auto max-w-7xl px-4 py-12 sm:py-16 md:py-24">
         <div className="grid gap-8 md:grid-cols-2 items-center">
           <div className="space-y-6">
-            <Badge variant="outline" className="border-accent bg-accent/30 text-accent-foreground">
+            <Badge variant="outline" className="border-accent bg-accent/30 text-accent-foreground" style={store ? { borderColor: store.accentColor, backgroundColor: `${store.accentColor}30` } : undefined}>
               <Mountain className="h-3 w-3 mr-1" />
-              Made in the Himalayas
+              {store ? `Made in Nepal · ${store.currency}` : 'Made in the Himalayas'}
             </Badge>
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight text-foreground leading-[1.05]">
-              Authentic Nepali goods,
-              <span className="block text-primary">from mountain to your door.</span>
+              {store ? (
+                <>
+                  {store.tagline || store.description?.split('.')[0] || 'Authentic Nepali goods, made by hand.'}
+                  <span className="block text-primary" style={store ? { color: store.primaryColor } : undefined}>From {storeName}.</span>
+                </>
+              ) : (
+                <>
+                  Authentic Nepali goods,
+                  <span className="block text-primary">from mountain to your door.</span>
+                </>
+              )}
             </h1>
             <p className="text-lg text-muted-foreground max-w-md leading-relaxed">
-              Hand-loomed pashmina from Mustang, hand-forged khukuris from Bhojpur, single-estate Ilam tea.
-              Sourced direct from Nepali artisans. Pay with eSewa, Khalti, or cash on delivery. Shipped to all 77 districts.
+              {store?.description || 'Hand-loomed pashmina from Mustang, hand-forged khukuris from Bhojpur, single-estate Ilam tea. Sourced direct from Nepali artisans. Pay with eSewa, Khalti, or cash on delivery. Shipped to all 77 districts.'}
             </p>
             <div className="flex flex-wrap gap-3">
               <Button size="lg" onClick={() => setStoreSection('products')} className="h-12 px-6 text-base">

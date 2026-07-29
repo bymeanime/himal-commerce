@@ -6,8 +6,9 @@ import { ProductCard } from './product-card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Search, SlidersHorizontal, Leaf, Shirt, Hammer, Gem, Home, Book } from 'lucide-react'
+import { Search, SlidersHorizontal, Leaf, Shirt, Hammer, Gem, Home, Book, Package } from 'lucide-react'
 import type { Product, Category } from '@/lib/types'
+import { useCurrentStore } from '@/lib/use-current-store'
 
 const CAT_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   shirt: Shirt,
@@ -16,30 +17,34 @@ const CAT_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   gem: Gem,
   home: Home,
   book: Book,
+  package: Package,
 }
 
 export function ProductGrid() {
+  const { storeId } = useCurrentStore()
   const [category, setCategory] = useState<string>('all')
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<'newest' | 'low' | 'high'>('newest')
 
   const { data: productsData, isLoading: loadingProducts } = useQuery<{ products: Product[] }>({
-    queryKey: ['products', 'storefront', category, query],
+    queryKey: ['products', 'storefront', storeId, category, query],
     queryFn: async () => {
-      const params = new URLSearchParams({ status: 'published' })
+      const params = new URLSearchParams({ status: 'published', storeId: storeId! })
       if (category !== 'all') params.set('category', category)
       if (query) params.set('q', query)
       const res = await fetch(`/api/products?${params}`)
       return res.json()
     },
+    enabled: !!storeId,
   })
 
   const { data: catData } = useQuery<{ categories: (Category & { _count?: { products: number } })[] }>({
-    queryKey: ['categories'],
+    queryKey: ['categories', storeId],
     queryFn: async () => {
-      const res = await fetch('/api/categories')
+      const res = await fetch(`/api/categories?storeId=${storeId}`)
       return res.json()
     },
+    enabled: !!storeId,
   })
 
   const sorted = useMemo(() => {
@@ -111,7 +116,7 @@ export function ProductGrid() {
       </div>
 
       {/* Grid */}
-      {loadingProducts ? (
+      {loadingProducts || !storeId ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
           {Array.from({ length: 8 }).map((_, i) => (
             <Skeleton key={i} className="aspect-[3/4] rounded-xl" />

@@ -3,9 +3,11 @@ import { db } from '@/lib/db'
 import { calcShippingCost, getProvince } from '@/lib/nepal'
 
 // POST /api/checkout — place an order from the storefront
+// Body must include storeId
 export async function POST(req: NextRequest) {
   const body = await req.json()
   const {
+    storeId,
     customerName,
     customerPhone,
     customerEmail,
@@ -13,10 +15,13 @@ export async function POST(req: NextRequest) {
     shippingCity,
     shippingDistrict,
     paymentMethod,
-    items, // [{ productId, title, thumbnail, price (paisa), quantity }]
+    items,
     notes,
   } = body
 
+  if (!storeId) {
+    return NextResponse.json({ error: 'storeId is required' }, { status: 400 })
+  }
   if (!customerName || !customerPhone || !shippingAddress || !shippingCity || !shippingDistrict) {
     return NextResponse.json({ error: 'Missing required shipping fields' }, { status: 400 })
   }
@@ -27,16 +32,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid payment method' }, { status: 400 })
   }
 
+  // Verify all items belong to this store
+  const productIds = items.map((i: { productId: string }) => i.productId).filter(Boolean)
+  if (productIds.length) {
+    const storeProducts = await db.product.count({
+      where: { id: { in: productIds }, storeId },
+    })
+    if (storeProducts !== productIds.length) {
+      return NextResponse.json({ error: 'Some cart items do not belong to this store' }, { status: 400 })
+    }
+  }
+
   const subtotal = items.reduce((sum: number, it: { price: number; quantity: number }) => sum + it.price * it.quantity, 0)
   const shippingCost = calcShippingCost(shippingDistrict)
   const total = subtotal + shippingCost
   const province = getProvince(shippingDistrict) || 'Bagmati'
 
-  // Find or create customer by phone
-  let customer = await db.customer.findUnique({ where: { phone: customerPhone } })
+  // Find or create customer by phone within this store
+  let customer = await db.customer.findUnique({
+    where: { storeId_phone: { storeId, phone: customerPhone } },
+  })
   if (!customer) {
     customer = await db.customer.create({
       data: {
+        storeId,
         name: customerName,
         phone: customerPhone,
         email: customerEmail,
@@ -47,11 +66,12 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  const count = await db.order.count()
-  const orderNumber = `HC-${String(2024000 + count + 1)}`
+  const count = await db.order.count({ where: { storeId } })
+  const orderNumber = `HC-${String(1000 + count + 1)}`
 
   const order = await db.order.create({
     data: {
+      storeId,
       orderNumber,
       status: 'pending',
       customerId: customer.id,
@@ -78,7 +98,7 @@ export async function POST(req: NextRequest) {
         })),
       },
     },
-    include: { items: true, customer: true },
+    include: { items: true, customer: true, store: true },
   })
 
   // Decrement inventory

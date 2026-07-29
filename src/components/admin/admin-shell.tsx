@@ -1,6 +1,7 @@
 'use client'
 
 import { useUI } from '@/lib/ui-store'
+import { useCurrentStore } from '@/lib/use-current-store'
 import { Logo } from '@/components/logo'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -13,6 +14,7 @@ import {
   Store,
   Menu,
   X,
+  ArrowLeft,
 } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -31,6 +33,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const section = useUI((s) => s.adminSection)
   const setSection = useUI((s) => s.setAdminSection)
   const setView = useUI((s) => s.setView)
+  const exitToPlatform = useUI((s) => s.exitToPlatform)
+  const { store } = useCurrentStore()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   return (
@@ -38,9 +42,25 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       {/* Sidebar (desktop) */}
       <aside className="hidden md:flex w-60 shrink-0 flex-col border-r border-border/60 bg-sidebar">
         <div className="p-4 border-b border-border/60">
-          <Logo size="sm" />
+          {store ? (
+            <div className="flex items-center gap-2">
+              {store.logoUrl ? (
+                <img src={store.logoUrl} alt={store.name} className="h-8 w-8 rounded-lg object-cover" />
+              ) : (
+                <div className="h-8 w-8 rounded-lg grid place-items-center" style={{ backgroundColor: store.primaryColor }}>
+                  <Store className="h-4 w-4 text-white" />
+                </div>
+              )}
+              <div className="flex flex-col leading-none min-w-0">
+                <span className="font-bold tracking-tight text-sm truncate">{store.name}</span>
+                <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">Store admin</span>
+              </div>
+            </div>
+          ) : (
+            <Logo size="sm" />
+          )}
           <Badge variant="secondary" className="mt-2 bg-accent/40 text-accent-foreground text-[10px]">
-            Admin Dashboard
+            {store?.plan || 'free'} plan
           </Badge>
         </div>
         <nav className="flex-1 p-2 space-y-1">
@@ -60,7 +80,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             </button>
           ))}
         </nav>
-        <div className="p-3 border-t border-border/60">
+        <div className="p-3 border-t border-border/60 space-y-1">
           <Button
             variant="outline"
             size="sm"
@@ -69,6 +89,15 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           >
             <Store className="h-3.5 w-3.5 mr-1.5" />
             View storefront
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full text-muted-foreground"
+            onClick={exitToPlatform}
+          >
+            <ArrowLeft className="h-3.5 w-3.5 mr-1.5" />
+            All stores
           </Button>
         </div>
       </aside>
@@ -103,9 +132,14 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 </button>
               ))}
             </nav>
-            <Button variant="outline" size="sm" className="w-full" onClick={() => setView('storefront')}>
-              <Store className="h-3.5 w-3.5 mr-1.5" /> View storefront
-            </Button>
+            <div className="space-y-1">
+              <Button variant="outline" size="sm" className="w-full" onClick={() => setView('storefront')}>
+                <Store className="h-3.5 w-3.5 mr-1.5" /> View storefront
+              </Button>
+              <Button variant="ghost" size="sm" className="w-full text-muted-foreground" onClick={() => { exitToPlatform(); setMobileNavOpen(false) }}>
+                <ArrowLeft className="h-3.5 w-3.5 mr-1.5" /> All stores
+              </Button>
+            </div>
           </aside>
         </div>
       )}
@@ -117,7 +151,12 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setMobileNavOpen(true)}>
             <Menu className="h-5 w-5" />
           </Button>
-          <Logo size="sm" showText={false} />
+          <div className="flex items-center gap-2 min-w-0">
+            {store?.logoUrl ? (
+              <img src={store.logoUrl} alt={store.name} className="h-6 w-6 rounded object-cover" />
+            ) : null}
+            <span className="font-semibold text-sm truncate">{store?.name || 'Admin'}</span>
+          </div>
           <Badge variant="secondary" className="bg-accent/40 text-accent-foreground text-[10px]">Admin</Badge>
         </header>
 

@@ -1,8 +1,9 @@
 'use client'
 
-import { ShoppingCart, Mountain, Menu, Search, Phone } from 'lucide-react'
+import { ShoppingCart, Mountain, Menu, Search, Phone, ArrowLeft, Store as StoreIcon } from 'lucide-react'
 import { useCart } from '@/lib/cart-store'
 import { useUI } from '@/lib/ui-store'
+import { useCurrentStore } from '@/lib/use-current-store'
 import { Logo } from '@/components/logo'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -18,8 +19,9 @@ import { useState } from 'react'
 export function StorefrontHeader() {
   const cartCount = useCart((s) => s.items.reduce((sum, i) => sum + i.quantity, 0))
   const openCart = useCart((s) => s.open)
-  const setView = useUI((s) => s.setView)
   const setStoreSection = useUI((s) => s.setStoreSection)
+  const exitToPlatform = useUI((s) => s.exitToPlatform)
+  const { store } = useCurrentStore()
   const [menuOpen, setMenuOpen] = useState(false)
 
   const navItems = [
@@ -30,11 +32,15 @@ export function StorefrontHeader() {
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border/60 bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
-      {/* Top announcement bar — Nepal-red */}
-      <div className="bg-primary text-primary-foreground text-[11px] sm:text-xs">
+      {/* Top announcement bar — store-colored */}
+      <div className="bg-primary text-primary-foreground text-[11px] sm:text-xs" style={store ? { backgroundColor: store.primaryColor } : undefined}>
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-1.5 gap-4">
           <p className="flex items-center gap-1.5 truncate">
-            <Mountain className="h-3 w-3 shrink-0" />
+            <button onClick={exitToPlatform} className="flex items-center gap-1 hover:opacity-80 shrink-0">
+              <ArrowLeft className="h-3 w-3" />
+              <span>All stores</span>
+            </button>
+            <span className="text-primary-foreground/40">·</span>
             <span className="truncate">Free shipping inside Kathmandu Valley on orders over रू 5,000</span>
           </p>
           <p className="hidden sm:flex items-center gap-1.5 shrink-0">
@@ -46,9 +52,26 @@ export function StorefrontHeader() {
 
       {/* Main header */}
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
-        <button onClick={() => { setStoreSection('home'); setView('storefront') }} className="shrink-0">
-          <Logo size="md" />
-        </button>
+        <div className="flex items-center gap-3 shrink-0">
+          {/* Show store logo + name when in a store, otherwise show platform logo */}
+          {store ? (
+            <button onClick={() => setStoreSection('home')} className="flex items-center gap-2.5">
+              {store.logoUrl ? (
+                <img src={store.logoUrl} alt={store.name} className="h-9 w-9 rounded-lg object-cover" />
+              ) : (
+                <div className="h-9 w-9 rounded-lg grid place-items-center" style={{ backgroundColor: store.primaryColor }}>
+                  <StoreIcon className="h-4 w-4 text-white" />
+                </div>
+              )}
+              <div className="flex flex-col leading-none text-left">
+                <span className="font-bold tracking-tight text-foreground">{store.name}</span>
+                <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{store.currency} · Himal Commerce</span>
+              </div>
+            </button>
+          ) : (
+            <Logo size="md" />
+          )}
+        </div>
 
         {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-1">
@@ -70,9 +93,9 @@ export function StorefrontHeader() {
             variant="outline"
             size="sm"
             className="hidden sm:flex"
-            onClick={() => { setView('admin') }}
+            onClick={() => useUI.setState({ view: 'admin' })}
           >
-            Admin Dashboard
+            Store admin
           </Button>
 
           <Button
@@ -120,9 +143,16 @@ export function StorefrontHeader() {
                 <Button
                   variant="outline"
                   className="justify-start"
-                  onClick={() => { setView('admin'); setMenuOpen(false) }}
+                  onClick={() => { useUI.setState({ view: 'admin' }); setMenuOpen(false) }}
                 >
-                  Admin Dashboard
+                  Store admin
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="justify-start"
+                  onClick={() => { exitToPlatform(); setMenuOpen(false) }}
+                >
+                  <ArrowLeft className="h-3.5 w-3.5 mr-1" /> Back to all stores
                 </Button>
               </div>
             </SheetContent>

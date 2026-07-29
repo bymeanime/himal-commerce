@@ -6,6 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { formatNPR } from '@/lib/nepal'
 import { useUI } from '@/lib/ui-store'
+import { useCurrentStore } from '@/lib/use-current-store'
 import {
   ShoppingCart,
   Users,
@@ -58,16 +59,18 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 export function AdminDashboard() {
+  const { storeId } = useCurrentStore()
   const { data, isLoading } = useQuery<Stats>({
-    queryKey: ['stats'],
+    queryKey: ['stats', storeId],
     queryFn: async () => {
-      const res = await fetch('/api/stats')
+      const res = await fetch(`/api/stats?storeId=${storeId}`)
       return res.json()
     },
+    enabled: !!storeId,
   })
   const setSection = useUI((s) => s.setAdminSection)
 
-  if (isLoading || !data) {
+  if (isLoading || !data || !storeId) {
     return (
       <div className="p-6 space-y-6">
         <Skeleton className="h-8 w-48" />
@@ -113,7 +116,7 @@ export function AdminDashboard() {
       <div>
         <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Welcome back, Namaste! Here&apos;s what&apos;s happening with your store.
+          Store overview — orders, revenue, top sellers.
         </p>
       </div>
 

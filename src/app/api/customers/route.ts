@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// GET /api/customers
-export async function GET() {
+// GET /api/customers?storeId=xxx
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url)
+  const storeId = searchParams.get('storeId')
+
+  if (!storeId) {
+    return NextResponse.json({ error: 'storeId is required' }, { status: 400 })
+  }
+
   const customers = await db.customer.findMany({
+    where: { storeId },
     include: {
       _count: { select: { orders: true } },
       orders: {
@@ -15,22 +23,17 @@ export async function GET() {
     orderBy: { createdAt: 'desc' },
   })
 
-  const enriched = customers.map((c) => ({
-    ...c,
-    orderCount: c._count.orders,
-  }))
-
-  // Aggregate total spent per customer
   const totals = await db.order.groupBy({
     by: ['customerId'],
     _sum: { total: true },
-    where: { customerId: { in: enriched.map((c) => c.id) } },
+    where: { customerId: { in: customers.map((c) => c.id) } },
   })
   const totalMap = new Map(totals.map((t) => [t.customerId, t._sum.total || 0]))
 
   return NextResponse.json({
-    customers: enriched.map((c) => ({
+    customers: customers.map((c) => ({
       id: c.id,
+      storeId: c.storeId,
       name: c.name,
       phone: c.phone,
       email: c.email,
@@ -38,7 +41,7 @@ export async function GET() {
       city: c.city,
       district: c.district,
       createdAt: c.createdAt,
-      orderCount: c.orderCount,
+      orderCount: c._count.orders,
       totalSpent: totalMap.get(c.id) || 0,
       recentOrders: c.orders,
     })),
@@ -48,13 +51,14 @@ export async function GET() {
 // POST /api/customers
 export async function POST(req: NextRequest) {
   const body = await req.json()
-  const { name, phone, email, address, city, district } = body
-  if (!name || !phone) return NextResponse.json({ error: 'name and phone required' }, { status: 400 })
-
+  const { storeId, name, phone, email, address, city, district } = body
+  if (!storeId || !name || !phone) {
+    return NextResponse.json({ error: 'storeId, name, phone are required' }, { status: 400 })
+  }
   try {
-    const customer = await db.customer.create({ data: { name, phone, email, address, city, district } })
+    const customer = await db.customer.create({ data: { storeId, name, phone, email, address, city, district } })
     return NextResponse.json({ customer }, { status: 201 })
   } catch {
-    return NextResponse.json({ error: 'Phone number already exists' }, { status: 400 })
+    return NextResponse.json({ error: 'Phone already exists for this store' }, { status: 400 })
   }
 }

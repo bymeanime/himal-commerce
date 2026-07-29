@@ -2,25 +2,42 @@
 
 import { Logo } from '@/components/logo'
 import { useUI } from '@/lib/ui-store'
+import { useCurrentStore } from '@/lib/use-current-store'
 import { Mountain, Mail, Phone, MapPin, Github } from 'lucide-react'
 
 export function StorefrontFooter() {
   const setStoreSection = useUI((s) => s.setStoreSection)
-  const setView = useUI((s) => s.setView)
+  const exitToPlatform = useUI((s) => s.exitToPlatform)
+  const { store } = useCurrentStore()
 
   return (
     <footer className="border-t border-border/60 bg-secondary/40 mt-auto">
       <div className="mx-auto max-w-7xl px-4 py-10 md:py-14">
         <div className="grid gap-8 md:grid-cols-4">
           <div className="space-y-3 md:col-span-2">
-            <Logo size="md" />
+            {store ? (
+              <div className="flex items-center gap-2">
+                {store.logoUrl ? (
+                  <img src={store.logoUrl} alt={store.name} className="h-9 w-9 rounded-lg object-cover" />
+                ) : (
+                  <div className="h-9 w-9 rounded-lg grid place-items-center" style={{ backgroundColor: store.primaryColor }}>
+                    <Mountain className="h-4 w-4 text-white" />
+                  </div>
+                )}
+                <div className="flex flex-col leading-none">
+                  <span className="font-bold tracking-tight">{store.name}</span>
+                  <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">A store on Himal Commerce</span>
+                </div>
+              </div>
+            ) : (
+              <Logo size="md" />
+            )}
             <p className="text-sm text-muted-foreground max-w-sm leading-relaxed">
-              Nepal&apos;s headless commerce platform. Authentic Nepali-made goods, shipped from
-              mountain to your door — anywhere in the country.
+              {store?.description || "Nepal's headless commerce platform. Authentic Nepali-made goods, shipped from mountain to your door — anywhere in the country."}
             </p>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Mountain className="h-3.5 w-3.5 text-primary" />
-              <span>Inspired by Medusa · Built for Nepal</span>
+              <span>A store powered by Himal Commerce · Medusa-inspired</span>
             </div>
           </div>
 
@@ -43,8 +60,13 @@ export function StorefrontFooter() {
                 </button>
               </li>
               <li>
-                <button onClick={() => setView('admin')} className="hover:text-foreground transition-colors">
-                  Admin dashboard
+                <button onClick={() => useUI.setState({ view: 'admin' })} className="hover:text-foreground transition-colors">
+                  Store admin
+                </button>
+              </li>
+              <li>
+                <button onClick={exitToPlatform} className="hover:text-foreground transition-colors">
+                  All stores (platform)
                 </button>
               </li>
             </ul>

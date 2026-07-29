@@ -1,5 +1,5 @@
-// Himal Commerce - Nepal-localized headless commerce platform
-// Inspired by Medusa, built for Nepal
+// Himal Commerce — multi-tenant commerce platform (Medusa-style)
+// One platform, many stores. Each store has isolated products/orders/customers.
 
 generator client {
   provider = "prisma-client-js"
@@ -10,41 +10,102 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ====== Tenant ======
+model Store {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  description  String?
+  logoUrl      String?
+  // Branding
+  primaryColor String   @default("#9C1A1A") // Nepal crimson default
+  accentColor  String   @default("#E8B547") // Saffron default
+  currency     String   @default("NPR")
+  // Owner / contact
+  ownerName    String
+  ownerEmail   String?
+  ownerPhone   String?
+  // Status
+  status       String   @default("active") // active | suspended | draft
+  plan         String   @default("free") // free | pro | enterprise
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  products     Product[]
+  categories   Category[]
+  orders       Order[]
+  customers    Customer[]
+  members      StoreMember[]
+}
+
+// ====== Users (simplified — no password auth for demo) ======
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  memberships StoreMember[]
+}
+
+model StoreMember {
+  id      String @id @default(cuid())
+  userId  String
+  storeId String
+  role    String @default("owner") // owner | admin | staff
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, storeId])
+}
+
+// ====== Catalog (scoped to Store) ======
 model Product {
   id          String   @id @default(cuid())
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
   title       String
   subtitle    String?
   description String
   thumbnail   String?
-  // Price stored in paisa (1 NPR = 100 paisa) to avoid float issues
+  // Price stored in smallest currency unit (paisa for NPR) to avoid float issues
   price       Int
   compareAt   Int?
-  sku         String? @unique
-  barcode     String?
+  sku         String?
   status      String   @default("published") // draft | published
   inventory   Int      @default(0)
   weightGrams Int?
   // Nepal-specific
-  origin      String? // district of origin in Nepal
+  origin      String?
   isHandmade  Boolean  @default(false)
   categoryId  String?
   category    Category? @relation(fields: [categoryId], references: [id])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   orderItems  OrderItem[]
+
+  @@index([storeId])
 }
 
 model Category {
   id        String   @id @default(cuid())
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
   name      String
-  slug      String   @unique
+  slug      String
   icon      String?
   products  Product[]
+
+  @@unique([storeId, slug])
+  @@index([storeId])
 }
 
+// ====== Orders (scoped to Store) ======
 model Order {
   id          String   @id @default(cuid())
-  orderNumber String   @unique
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  orderNumber String
   status      String   @default("pending") // pending | processing | shipped | delivered | cancelled
   fulfillment String   @default("unfulfilled") // unfulfilled | fulfilled | returned
   customerId  String?
@@ -59,7 +120,7 @@ model Order {
   shippingAddress  String
   shippingCity     String
   shippingDistrict String
-  shippingZone     String // Province or zone
+  shippingZone     String // Province
 
   // Payment — Nepal methods
   paymentMethod String // cod | esewa | khalti
@@ -75,6 +136,9 @@ model Order {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   items     OrderItem[]
+
+  @@unique([storeId, orderNumber])
+  @@index([storeId])
 }
 
 model OrderItem {
@@ -91,12 +155,17 @@ model OrderItem {
 
 model Customer {
   id        String   @id @default(cuid())
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
   name      String
-  phone     String   @unique
+  phone     String
   email     String?
   address   String?
   city      String?
   district  String?
   createdAt DateTime @default(now())
   orders    Order[]
+
+  @@unique([storeId, phone])
+  @@index([storeId])
 }

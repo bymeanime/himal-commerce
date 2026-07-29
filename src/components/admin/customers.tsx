@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/sheet'
 import { formatNPR } from '@/lib/nepal'
 import { Search, Phone, Mail, MapPin, Users, ShoppingBag } from 'lucide-react'
+import { useCurrentStore } from '@/lib/use-current-store'
 
 type CustomerRow = {
   id: string
@@ -34,10 +35,12 @@ type CustomerRow = {
 export function AdminCustomers() {
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<CustomerRow | null>(null)
+  const { storeId } = useCurrentStore()
 
   const { data, isLoading } = useQuery<{ customers: CustomerRow[] }>({
-    queryKey: ['customers'],
-    queryFn: async () => (await fetch('/api/customers')).json(),
+    queryKey: ['customers', storeId],
+    queryFn: async () => (await fetch(`/api/customers?storeId=${storeId}`)).json(),
+    enabled: !!storeId,
   })
 
   const customers = (data?.customers ?? []).filter((c) => {
@@ -45,6 +48,10 @@ export function AdminCustomers() {
     const q = search.toLowerCase()
     return c.name.toLowerCase().includes(q) || c.phone.includes(q) || (c.email || '').toLowerCase().includes(q)
   })
+
+  if (!storeId) {
+    return <div className="p-6 text-muted-foreground">No store selected.</div>
+  }
 
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-7xl">

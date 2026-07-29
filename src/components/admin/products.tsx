@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/sheet'
 import { formatNPR } from '@/lib/nepal'
 import type { Product, Category } from '@/lib/types'
+import { useCurrentStore } from '@/lib/use-current-store'
 import { Plus, Search, Pencil, Trash2, Package, MapPin, Hammer, Eye, EyeOff } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -50,6 +51,7 @@ import {
 
 export function AdminProducts() {
   const qc = useQueryClient()
+  const { storeId } = useCurrentStore()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [editing, setEditing] = useState<Product | null>(null)
@@ -57,18 +59,20 @@ export function AdminProducts() {
   const [deleting, setDeleting] = useState<Product | null>(null)
 
   const { data, isLoading } = useQuery<{ products: Product[] }>({
-    queryKey: ['products', 'admin', statusFilter, search],
+    queryKey: ['products', 'admin', storeId, statusFilter, search],
     queryFn: async () => {
-      const params = new URLSearchParams()
+      const params = new URLSearchParams({ storeId: storeId! })
       if (statusFilter !== 'all') params.set('status', statusFilter)
       if (search) params.set('q', search)
       const res = await fetch(`/api/products?${params}`)
       return res.json()
     },
+    enabled: !!storeId,
   })
   const { data: catData } = useQuery<{ categories: Category[] }>({
-    queryKey: ['categories'],
-    queryFn: async () => (await fetch('/api/categories')).json(),
+    queryKey: ['categories', storeId],
+    queryFn: async () => (await fetch(`/api/categories?storeId=${storeId}`)).json(),
+    enabled: !!storeId,
   })
 
   const deleteMut = useMutation({
@@ -86,6 +90,10 @@ export function AdminProducts() {
 
   const products = data?.products ?? []
   const categories = catData?.categories ?? []
+
+  if (!storeId) {
+    return <div className="p-6 text-muted-foreground">No store selected.</div>
+  }
 
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-7xl">
@@ -215,6 +223,7 @@ export function AdminProducts() {
           open={creating}
           onOpenChange={setCreating}
           categories={categories}
+          storeId={storeId}
         />
       )}
 
@@ -257,10 +266,12 @@ function ProductFormDialog({
   open,
   onOpenChange,
   categories,
+  storeId,
 }: {
   open: boolean
   onOpenChange: (b: boolean) => void
   categories: Category[]
+  storeId: string
 }) {
   const qc = useQueryClient()
   const [form, setForm] = useState({
@@ -284,6 +295,7 @@ function ProductFormDialog({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          storeId,
           ...form,
           price: Number(form.price),
           compareAt: form.compareAt ? Number(form.compareAt) : null,
