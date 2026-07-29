@@ -1,0 +1,102 @@
+// Himal Commerce - Nepal-localized headless commerce platform
+// Inspired by Medusa, built for Nepal
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  title       String
+  subtitle    String?
+  description String
+  thumbnail   String?
+  // Price stored in paisa (1 NPR = 100 paisa) to avoid float issues
+  price       Int
+  compareAt   Int?
+  sku         String? @unique
+  barcode     String?
+  status      String   @default("published") // draft | published
+  inventory   Int      @default(0)
+  weightGrams Int?
+  // Nepal-specific
+  origin      String? // district of origin in Nepal
+  isHandmade  Boolean  @default(false)
+  categoryId  String?
+  category    Category? @relation(fields: [categoryId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  orderItems  OrderItem[]
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  icon      String?
+  products  Product[]
+}
+
+model Order {
+  id          String   @id @default(cuid())
+  orderNumber String   @unique
+  status      String   @default("pending") // pending | processing | shipped | delivered | cancelled
+  fulfillment String   @default("unfulfilled") // unfulfilled | fulfilled | returned
+  customerId  String?
+  customer    Customer? @relation(fields: [customerId], references: [id])
+
+  // Customer snapshot (so order survives even if customer deleted)
+  customerName     String
+  customerPhone    String
+  customerEmail    String?
+
+  // Shipping — Nepal only
+  shippingAddress  String
+  shippingCity     String
+  shippingDistrict String
+  shippingZone     String // Province or zone
+
+  // Payment — Nepal methods
+  paymentMethod String // cod | esewa | khalti
+  paymentStatus String @default("unpaid") // unpaid | paid | refunded
+
+  // Money in paisa
+  subtotal     Int
+  shippingCost Int
+  total        Int
+
+  notes        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  items     OrderItem[]
+}
+
+model OrderItem {
+  id        String @id @default(cuid())
+  orderId   String
+  order     Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id])
+  title     String
+  thumbnail String?
+  price     Int
+  quantity  Int
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String   @unique
+  email     String?
+  address   String?
+  city      String?
+  district  String?
+  createdAt DateTime @default(now())
+  orders    Order[]
+}
