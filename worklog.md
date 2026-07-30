@@ -1233,3 +1233,214 @@ Stage Summary:
   * Multi-currency live exchange rates — currently static; fetch from Nepal Rastra Bank API in production
   * Blog search + tag filtering — basic listing works, advanced filtering is Phase 3
   * Affiliate self-serve portal — admin dashboard done, partner-facing portal is Phase 3
+
+---
+Task ID: phase-3
+Agent: main (Super Z)
+Task: Implement remaining expert-audit P0/P1/P2 findings — automated tests, mobile accessibility, reviews, wishlist, coupons, refunds, returns, abandoned carts, dashboard analytics, live FX, Sentry, blog search
+
+Work Log:
+- Read full worklog + audit report + Prisma schema + key lib/admin/storefront files
+  to understand the complete state of the codebase before starting
+
+QA (P0 — "Zero automated tests" finding):
+- Set up vitest with vitest.config.ts (node environment, @/ path alias)
+- Installed vitest + @vitest/coverage-v8 as devDependencies
+- Wrote 68 tests across 5 files:
+  * tests/unit/cart-store.test.ts (10 tests) — add/remove/merge/clear,
+    variant handling, cross-store reset, qty edge cases
+  * tests/unit/currency.test.ts (11 tests) — convertPaisa, formatPrice,
+    formatPriceWithCode, formatDualPrice, zero handling, metadata completeness
+  * tests/unit/bikram-sambat.test.ts (10 tests) — AD→BS conversion,
+    new-year transition, fiscal year, invoice number formatting
+  * tests/unit/nepal.test.ts (28 tests) — formatNPR, calcShippingCost
+    (KTM valley/Karnali/Sudurpashchim zones), getProvince, all 77 districts,
+    isValidNepalPhone (NTC/Ncell/Smart Cell prefixes, +977, dashes)
+  * tests/api/tenant-isolation.test.ts (9 tests) — multi-tenant IDOR
+    protection pattern (safe vs vulnerable), cross-tenant access blocked
+- CAUGHT & FIXED REAL BUG: bikram-sambat.ts had inverted year-transition
+  logic — dates before April 14 were getting bsYear = AD+57 (wrong) instead
+  of AD+56. Tests proved it, fix verified. This would have produced wrong
+  fiscal years on every invoice generated Jan-April.
+- Added test/test:watch/test:coverage scripts to package.json
+- All 68 tests pass in <1 second
+
+Mobile Accessibility (P1 — "Admin mobile nav drawer" finding):
+- Replaced custom <div onClick> mobile nav with Radix Sheet component
+  (same pattern as storefront CartDrawer/ProductDetailDrawer)
+- Now provides: focus trap, aria-modal, role="dialog", Escape key handler,
+  aria-label on trigger button, aria-current="page" on active nav item
+- WCAG 2.2 AA compliant (SC 2.1.2, 2.4.3, 4.1.2)
+- Added aria-label="Open navigation menu" on the hamburger button
+- Net code reduction (~40 lines → ~35 lines, more robust)
+
+Mobile Layout (P2 — "Admin tables cramped on mobile" finding):
+- Orders table: added mobile card-list layout (md:hidden) alongside the
+  desktop table (hidden md:block). Each order renders as a tappable card
+  with order number, status badge, customer, phone, payment method+status,
+  and total. Nepal merchants are mobile-first.
+
+Storefront — Product Reviews (P1):
+- New ProductReviews component with:
+  * Rating summary (average + 5-bar distribution chart)
+  * Review cards with star rating, verified-buyer badge, title, body, date
+  * "Write a review" dialog with interactive star picker, name, phone
+    (for verified-buyer lookup), title, body
+  * Server-side verified-buyer check (looks up past orders by phone)
+  * All new reviews start as 'pending' for store-owner moderation
+- New /api/reviews (GET with storeId/productId/status filter, POST submit)
+  and /api/reviews/[id] (PATCH approve/reject, DELETE)
+- Multi-tenant safety: verifies product.storeId === query storeId
+- Wired into ssr-product-detail.tsx (replaces static review display)
+
+Storefront — Wishlist (P1):
+- New wishlist-store.ts (zustand + persist) with auto-generated sessionKey
+  (stored in localStorage, sent to API for server-side hydration)
+- New WishlistButton component with optimistic toggle, heart fill animation,
+  rose-color when active, aria-pressed state
+- New /api/wishlist (GET list, POST add, DELETE remove) — multi-tenant safe
+- Wired into ssr-product-detail.tsx next to the Add-to-cart button
+
+Storefront — Coupon Redemption (P1):
+- Checkout modal now has a coupon input on the payment step
+- Validates via PATCH /api/coupons with action='validate'
+- Supports 3 coupon types: percent (bps), fixed (paisa), free_shipping
+- Shows applied coupon as a green pill with type description + remove button
+- Discount line appears in both payment-step and review-step totals
+- Free-shipping coupons zero out the shipping cost
+- Coupon ID + discount sent to /api/checkout on order placement
+- New /api/coupons (GET list, POST create, PATCH validate) and
+  /api/coupons/[id] (PATCH update, DELETE) — all multi-tenant safe
+
+Admin — Enhanced Orders (P1):
+- Rewrote orders.tsx with a 4-tab detail drawer:
+  1. Details: status management (now includes on_hold/returned/refunded),
+     customer+shipping cards, payment toggle, items list, totals with
+     discount + VAT lines, customer notes
+  2. Shipping: courier dropdown (Pathao/Nepal Can Move/Aramex/FedEx/other),
+     tracking number input, save button, shipped-banner with timestamp,
+     full refund form (amount, method, reason, confirm dialog)
+  3. Notes: internal notes (staff-only, append-on-save with timestamp) +
+     read-only customer notes
+  4. History: order events timeline (OrderEvent model) with color-coded
+     dots (refund=rose, return=orange, status=blue, note=amber), actor kind,
+     event type badge
+- Fetches order events via /api/orders/[id]?include=events
+- Refund issued via POST /api/refunds — updates order.paymentStatus to
+  'refunded' or 'partially_refunded', sets refundedAt, logs order event
+- Mobile card layout for the orders list (table on md+)
+
+Admin — Reviews Moderation (P1):
+- New AdminReviews component with:
+  * Stats summary (average rating, pending count, 5-bar distribution)
+  * Status filter (pending/approved/rejected/all)
+  * Review cards showing product thumbnail, title, star rating, verified
+    badge, customer name, date, title, body
+  * Approve / Reject / Delete actions with confirm on delete
+- Wired into admin nav as "Reviews" section
+
+Admin — Abandoned Carts (P1):
+- New AdminAbandonedCarts component with:
+  * Stats: open count, open value (paisa), recovered count, recovery rate
+  * Cart cards showing customer phone/email, item summary, cart value,
+    reminder-sent badges, timestamp
+  * Click-to-call and WhatsApp deep-link buttons (wa.me/977XXXXXXXXXX)
+  * Info banner about the daily cron job (09:00 NPT)
+- New /api/abandoned-carts (GET with storeId + optional recovered filter)
+- Wired into admin nav as "Abandoned Carts" section
+
+Admin — Enhanced Dashboard (P1):
+- Rewrote dashboard.tsx with:
+  * Action-items banner (low stock, pending reviews, abandoned carts,
+    pending returns) — click to jump to the relevant section
+  * Conversion funnel visualization (page_view → product_view →
+    add_to_cart → checkout_start → checkout_complete) with step-by-step
+    dropoff percentages
+  * Cart abandonment rate
+  * Low-stock alerts card (top 5 products at/below threshold)
+  * Existing stat cards + revenue chart + order status + recent orders
+    + top sellers + category breakdown
+- New /api/dashboard (GET) — aggregates analytics events into funnel,
+  daily breakdown, low-stock products, pending reviews, abandoned cart
+  stats, pending returns
+
+Multi-currency — Live NRB Rates (P2):
+- Rewrote currency.ts with fetchLiveRates() that calls Nepal Rastra Bank's
+  daily forex API (https://www.nrb.org.np/api/forex/v1/rates)
+- Parses USD (per unit) and INR (per 100 units) buy rates, inverts to
+  get NPR→foreign conversion
+- Caches for 6 hours (NRB updates daily; we refresh more often for
+  mid-day corrections)
+- Falls back to static rates if API unreachable — never crashes the page
+- Uses Next.js fetch cache (next: { revalidate }) for SSR
+
+Sentry (P2):
+- Installed @sentry/nextjs
+- Updated instrumentation.ts to dynamically import and init Sentry when
+  SENTRY_DSN is set, with error filtering (NEXT_NOT_FOUND, NEXT_REDIRECT,
+  ResizeObserver loop) and Chrome-extension URL denial
+- Added sentry.client.config.ts (browser, with session replays at 5% /
+  error sessions at 100%), sentry.server.config.ts, sentry.edge.config.ts
+- Activate by setting SENTRY_DSN env var in Vercel
+
+Returns/RMA (P1):
+- New /api/returns (GET list, POST create, PATCH update status)
+- Status workflow: requested → approved/rejected → received →
+  refunded/exchanged
+- Logs order events on every status change
+- Multi-tenant safe (verifies order.storeId)
+- Ready for storefront order-lookup portal (Phase 4)
+
+Blog Search + Tag Filtering (P2):
+- Updated /s/[storeSlug]/blog/page.tsx to accept ?q= and ?tag= search params
+- Server-side filtering by title/excerpt (text) and tags (JSON array)
+- New BlogExplorer client component with live search input (debounced URL
+  update) and clickable tag pills (toggle active tag)
+- All tags collected from published posts and shown as filter chips
+
+Build + Deploy:
+- Local typecheck: clean (npx tsc --noEmit — 0 errors)
+- Local tests: 68/68 pass in 832ms
+- Local build: 50 routes registered (was 43), 0 errors
+- Committed as `feat: Phase 3 — expert audit implementation` (commit e37a136)
+- Pushed to github.com/bymeanime/himal-commerce (main branch)
+- Vercel auto-deployed: deployment dpl_E3Ri → READY
+- Verified live:
+  * /api/health → 200, db:ok
+  * /api/reviews?storeId=... → 200, returns reviews + stats
+  * /api/dashboard?storeId=... → 200, returns funnel + low-stock + abandoned
+  * /api/abandoned-carts?storeId=... → 200, returns carts + recovery stats
+  * /api/coupons?storeId=... → 200, returns coupons list
+  * /s/himal-crafts → 200 (storefront homepage)
+  * /s/himal-crafts/p/dhaka-topi → 200 (product page with reviews + wishlist)
+  * /s/himal-crafts/blog → 200 (blog with search + tags)
+  * /s/himal-crafts/c/apparel → 200 (category page)
+  * /robots.txt → 200
+  * /sitemap.xml → 200 (9.9KB)
+
+Stage Summary:
+- Production deploy: https://himal-commerce.vercel.app (READY, commit e37a136)
+- GitHub: 1 commit pushed (e37a136) on main branch
+- 68 automated tests covering cart logic, currency, calendar, phone validation,
+  and multi-tenant IDOR protection — the codebase now has a regression safety net
+- Real bug caught & fixed by tests: bikram-sambat year transition was inverted
+- Mobile admin nav is now WCAG 2.2 AA accessible (Radix Sheet with focus trap)
+- Full reviews workflow: submit (storefront) → moderate (admin) → display (storefront)
+- Full wishlist: toggle (storefront) → persisted locally + server-side
+- Full coupon system: create (admin) → validate + apply (checkout) → record (order)
+- Full refund system: issue (admin orders) → update payment status → log event
+- Full returns/RMA: API ready for storefront order-lookup portal
+- Dashboard now shows conversion funnel, low-stock alerts, action items
+- Multi-currency fetches live rates from Nepal Rastra Bank
+- Sentry SDK installed (activate with SENTRY_DSN env var)
+- Blog has search + tag filtering
+
+Remaining (Phase 4 — needs external accounts/credentials):
+- Real next-auth + phone OTP via SparrowSMS — needs verified Nepal SMS gateway account
+- Real eSewa/Khalti gateway integration — needs per-store merchant credentials + callback endpoint
+- Activate Sentry — set SENTRY_DSN env var in Vercel dashboard
+- Affiliate self-serve portal — admin dashboard done, partner-facing portal is Phase 4
+- Storefront order-lookup portal (for customers to view their orders + request returns)
+- Admin coupons management UI (API exists, UI not yet built)
+- Admin returns management UI (API exists, UI not yet built — currently
+  returns are visible in the order history timeline)
