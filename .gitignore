@@ -61,3 +61,4 @@ server.log
 /db/
 prisma/dev.db
 prisma/*.db-journal
+tool-results/
