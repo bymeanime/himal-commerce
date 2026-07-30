@@ -1,7 +1,12 @@
 import { ImageResponse } from 'next/og'
 import { db } from '@/lib/db'
 
-export const runtime = 'edge'
+// IMPORTANT: This route must run on the Node.js runtime, NOT 'edge'.
+// The Edge runtime has a 1 MB bundle size limit (Hobby plan) and Prisma's
+// query engine is ~1.7 MB, which exceeds that limit. Using 'nodejs'
+// raises the limit to ~50 MB and lets Prisma connect to Postgres
+// directly. next/og's ImageResponse works in both runtimes.
+export const runtime = 'nodejs'
 export const alt = 'Product image'
 export const size = { width: 1200, height: 630 }
 export const contentType = 'image/png'
