@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -7,12 +8,23 @@ import { formatNPR } from '@/lib/nepal'
 import type { Product } from '@/lib/types'
 import { useCart } from '@/lib/cart-store'
 import { useUI } from '@/lib/ui-store'
+import { useCurrentStore } from '@/lib/use-current-store'
 import { MapPin, Hammer, Plus, Layers } from 'lucide-react'
 import { toast } from 'sonner'
 
-export function ProductCard({ product }: { product: Product }) {
+export function ProductCard({
+  product,
+  storeSlug,
+}: {
+  product: Product
+  storeSlug?: string
+}) {
   const add = useCart((s) => s.add)
   const setSelectedProductId = useUI((s) => s.setSelectedProductId)
+  const { store } = useCurrentStore()
+
+  // Prefer explicit prop, fall back to current store's slug
+  const slug = storeSlug ?? store?.slug
 
   const variantCount = product.variants?.length ?? 0
   const hasVariants = variantCount > 0
@@ -21,9 +33,15 @@ export function ProductCard({ product }: { product: Product }) {
   // (so the user can pick the variant). For products without, add directly.
   const onAdd = (e: React.MouseEvent) => {
     e.stopPropagation()
+    e.preventDefault()
     if (hasVariants) {
-      setSelectedProductId(product.id)
-      toast.info('Choose an option', { description: `${product.title} has ${variantCount} variants` })
+      if (slug && product.slug) {
+        // On SSR routes, navigate to product page instead of drawer
+        window.location.href = `/s/${slug}/p/${product.slug}`
+      } else {
+        setSelectedProductId(product.id)
+        toast.info('Choose an option', { description: `${product.title} has ${variantCount} variants` })
+      }
     } else {
       add(product, 1, null)
       toast.success('Added to cart', { description: product.title })
@@ -42,10 +60,10 @@ export function ProductCard({ product }: { product: Product }) {
   const maxPrice = variantPrices.length ? Math.max(...variantPrices) : product.price
   const hasPriceRange = hasVariants && minPrice !== maxPrice
 
-  return (
+  // Wrap card in Link if we have a slug (SSR mode)
+  const cardContent = (
     <Card
-      className="group cursor-pointer overflow-hidden border-border/60 hover:border-primary/40 hover:shadow-md transition-all p-0 gap-0"
-      onClick={() => setSelectedProductId(product.id)}
+      className="group cursor-pointer overflow-hidden border-border/60 hover:border-primary/40 hover:shadow-md transition-all p-0 gap-0 h-full"
     >
       <div className="relative aspect-square overflow-hidden bg-muted">
         {product.thumbnail ? (
@@ -120,5 +138,21 @@ export function ProductCard({ product }: { product: Product }) {
         </Button>
       </div>
     </Card>
+  )
+
+  // In SSR mode (slug available), wrap in Link to product page
+  if (slug && product.slug) {
+    return (
+      <Link href={`/s/${slug}/p/${product.slug}`} className="block h-full">
+        {cardContent}
+      </Link>
+    )
+  }
+
+  // SPA mode — clicking the card opens the detail drawer
+  return (
+    <div onClick={() => setSelectedProductId(product.id)} className="h-full">
+      {cardContent}
+    </div>
   )
 }

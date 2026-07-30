@@ -101,6 +101,9 @@ model Store {
   wishlists    Wishlist[]
   abandonedCarts AbandonedCart[]
   payouts      SellerPayout[]
+  blogPosts    BlogPost[]
+  influencers  Influencer[]
+  affiliates   Affiliate[]
 }
 
 // ====== Users (simplified — no password auth for demo) ======
@@ -571,5 +574,84 @@ model SellerPayout {
   payoutMethod    String?  // esewa | khalti | bank
   createdAt       DateTime @default(now())
 
+  @@index([storeId])
+}
+
+// ====== New: Blog / CMS (Content Marketing panel P0) ======
+// Long-form editorial content for SEO — artisan stories, guides, brand storytelling.
+model BlogPost {
+  id          String   @id @default(cuid())
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  title       String
+  slug        String
+  excerpt     String?
+  body        String   // Markdown — rendered server-side
+  coverImage  String?
+  author      String?
+  tags        String?  // JSON array of strings
+  // SEO
+  metaTitle       String?
+  metaDescription String?
+  // Publishing workflow
+  status      String   @default("draft") // draft | published | archived
+  publishedAt DateTime?
+  // Editorial
+  viewCount   Int      @default(0)
+  readingMinutes Int   @default(2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([storeId, slug])
+  @@index([storeId, status, publishedAt])
+  @@index([storeId, slug])
+}
+
+// ====== New: Influencer / Affiliate program (Marketing panel P0) ======
+model Influencer {
+  id          String   @id @default(cuid())
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name        String
+  handle      String?  // @instagram_handle
+  email       String?
+  phone       String?
+  // Their unique tracking slug — appears in URL as ?ref=affiliateSlug
+  code        String   // unique per store
+  // Commission structure
+  commissionType   String  @default("percent") // percent | fixed
+  commissionValue  Int     @default(1000) // bps if percent, paisa if fixed
+  // Tracking
+  clicks       Int     @default(0)
+  conversions  Int     @default(0)
+  revenue      Int     @default(0) // paisa attributed
+  commissionEarned Int  @default(0)
+  status       String  @default("active") // active | paused | paid_out
+  // Payout tracking
+  totalPaidOut Int     @default(0)
+  createdAt    DateTime @default(now())
+
+  @@unique([storeId, code])
+  @@index([storeId])
+}
+
+model Affiliate {
+  id          String   @id @default(cuid())
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name        String
+  email       String?
+  // Their unique tracking slug — same as Influencer but different model for separation
+  code        String   // unique per store
+  commissionRateBps Int @default(500) // 5% default
+  clicks      Int     @default(0)
+  conversions Int     @default(0)
+  revenue     Int     @default(0)
+  commissionEarned Int @default(0)
+  totalPaidOut Int    @default(0)
+  status      String  @default("active")
+  createdAt   DateTime @default(now())
+
+  @@unique([storeId, code])
   @@index([storeId])
 }

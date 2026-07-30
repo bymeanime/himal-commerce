@@ -286,9 +286,12 @@ function StoreCard({ store, onEnter }: { store: StoreRow; onEnter: (as: 'storefr
         </div>
         <Separator />
         <div className="flex gap-2">
-          <Button size="sm" className="flex-1" onClick={() => onEnter('storefront')}>
-            <StoreIcon className="h-3.5 w-3.5 mr-1" /> Visit store
-          </Button>
+          <a
+            href={`/s/${store.slug}`}
+            className="flex-1 inline-flex items-center justify-center gap-1 h-8 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
+          >
+            <StoreIcon className="h-3.5 w-3.5" /> Visit store
+          </a>
           <Button size="sm" variant="outline" className="flex-1" onClick={() => onEnter('admin')}>
             <Settings2 className="h-3.5 w-3.5 mr-1" /> Admin
           </Button>

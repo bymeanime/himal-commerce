@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useState, useMemo, useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ProductCard } from './product-card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -20,31 +20,47 @@ const CAT_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   package: Package,
 }
 
-export function ProductGrid() {
+export function ProductGrid({
+  ssrProducts,
+  ssrStoreId,
+}: {
+  ssrProducts?: Product[]
+  ssrStoreId?: string
+}) {
   const { storeId } = useCurrentStore()
+  const effectiveStoreId = storeId ?? ssrStoreId
+  const qc = useQueryClient()
   const [category, setCategory] = useState<string>('all')
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState<'newest' | 'low' | 'high'>('newest')
 
+  // Pre-warm react-query cache with SSR products so initial render is instant
+  useEffect(() => {
+    if (ssrProducts && effectiveStoreId) {
+      qc.setQueryData(['products', 'storefront', effectiveStoreId, 'all', ''], { products: ssrProducts })
+    }
+  }, [ssrProducts, effectiveStoreId, qc])
+
   const { data: productsData, isLoading: loadingProducts } = useQuery<{ products: Product[] }>({
-    queryKey: ['products', 'storefront', storeId, category, query],
+    queryKey: ['products', 'storefront', effectiveStoreId, category, query],
     queryFn: async () => {
-      const params = new URLSearchParams({ status: 'published', storeId: storeId! })
+      const params = new URLSearchParams({ status: 'published', storeId: effectiveStoreId! })
       if (category !== 'all') params.set('category', category)
       if (query) params.set('q', query)
       const res = await fetch(`/api/products?${params}`)
       return res.json()
     },
-    enabled: !!storeId,
+    enabled: !!effectiveStoreId,
+    initialData: ssrProducts && category === 'all' && !query ? { products: ssrProducts } : undefined,
   })
 
   const { data: catData } = useQuery<{ categories: (Category & { _count?: { products: number } })[] }>({
-    queryKey: ['categories', storeId],
+    queryKey: ['categories', effectiveStoreId],
     queryFn: async () => {
-      const res = await fetch(`/api/categories?storeId=${storeId}`)
+      const res = await fetch(`/api/categories?storeId=${effectiveStoreId}`)
       return res.json()
     },
-    enabled: !!storeId,
+    enabled: !!effectiveStoreId,
   })
 
   const sorted = useMemo(() => {
@@ -116,7 +132,7 @@ export function ProductGrid() {
       </div>
 
       {/* Grid */}
-      {loadingProducts || !storeId ? (
+      {loadingProducts || !effectiveStoreId ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
           {Array.from({ length: 8 }).map((_, i) => (
             <Skeleton key={i} className="aspect-[3/4] rounded-xl" />

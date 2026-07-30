@@ -25,12 +25,14 @@ import {
   ArrowLeft,
   FolderTree,
   ChevronsUpDown,
+  FileText,
+  Megaphone,
 } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import type { Store } from '@/lib/types'
 
-type Section = 'dashboard' | 'products' | 'orders' | 'customers' | 'categories' | 'settings'
+type Section = 'dashboard' | 'products' | 'orders' | 'customers' | 'categories' | 'blog' | 'marketing' | 'settings'
 
 const NAV: { id: Section; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -38,6 +40,8 @@ const NAV: { id: Section; label: string; icon: React.ComponentType<{ className?:
   { id: 'products', label: 'Products', icon: Package },
   { id: 'categories', label: 'Categories', icon: FolderTree },
   { id: 'customers', label: 'Customers', icon: Users },
+  { id: 'blog', label: 'Blog', icon: FileText },
+  { id: 'marketing', label: 'Marketing', icon: Megaphone },
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
 

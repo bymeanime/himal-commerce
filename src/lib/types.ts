@@ -247,3 +247,58 @@ export type CartItem = {
   price: number // paisa
   quantity: number
 }
+
+export type BlogPost = {
+  id: string
+  storeId: string
+  title: string
+  slug: string
+  excerpt: string | null
+  body: string
+  coverImage: string | null
+  author: string | null
+  tags: string | null
+  metaTitle: string | null
+  metaDescription: string | null
+  status: 'draft' | 'published' | 'archived'
+  publishedAt: string | null
+  viewCount: number
+  readingMinutes: number
+  createdAt: string
+  updatedAt: string
+}
+
+export type Influencer = {
+  id: string
+  storeId: string
+  name: string
+  handle: string | null
+  email: string | null
+  phone: string | null
+  code: string
+  commissionType: 'percent' | 'fixed'
+  commissionValue: number
+  clicks: number
+  conversions: number
+  revenue: number
+  commissionEarned: number
+  totalPaidOut: number
+  status: 'active' | 'paused' | 'paid_out'
+  createdAt: string
+}
+
+export type Affiliate = {
+  id: string
+  storeId: string
+  name: string
+  email: string | null
+  code: string
+  commissionRateBps: number
+  clicks: number
+  conversions: number
+  revenue: number
+  commissionEarned: number
+  totalPaidOut: number
+  status: 'active' | 'paused'
+  createdAt: string
+}

@@ -23,6 +23,7 @@ import {
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { Category } from '@/lib/types'
+import { CurrencyToggle } from './currency-toggle'
 
 export function StorefrontHeader() {
   const cartCount = useCart((s) => s.items.reduce((sum, i) => sum + i.quantity, 0))
@@ -129,6 +130,9 @@ export function StorefrontHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
+          <div className="hidden sm:block">
+            <CurrencyToggle />
+          </div>
           <Button
             variant="outline"
             size="sm"

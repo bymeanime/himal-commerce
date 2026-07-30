@@ -13,6 +13,9 @@ async function seed() {
   await db.productImage.deleteMany()
   await db.product.deleteMany()
   await db.category.deleteMany()
+  await db.blogPost.deleteMany()
+  await db.influencer.deleteMany()
+  await db.affiliate.deleteMany()
   await db.storeMember.deleteMany()
   await db.store.deleteMany()
   await db.user.deleteMany()
@@ -197,12 +200,156 @@ async function seed() {
   }
   console.log(`  + ${orderCounter} orders across all stores`)
 
+  // ====== Seed blog posts (Content Marketing panel) ======
+  const blogPosts = [
+    {
+      storeSlug: 'himal-crafts',
+      title: 'Behind the Loom: A Day with Palpa\'s Master Weavers',
+      slug: 'behind-the-loom-palpa-weavers',
+      excerpt: 'In the hills of Palpa, a silent craft has survived centuries. We spent a day with the artisans who keep it alive.',
+      body: `# Behind the Loom
+
+In the hills of **Palpa**, a silent craft has survived centuries. We spent a day with the artisans who keep it alive.
+
+## Dawn at the workshop
+
+The clack of the loom starts before sunrise. Sita, 47, has been weaving since she was 12 — her mother taught her, and her grandmother taught her mother.
+
+> "We don't just weave cloth. We weave stories. Every pattern is a prayer."
+
+## The dhaka tradition
+
+Dhaka fabric is unique to Nepal. The geometric patterns are not printed — they are woven in, thread by thread, on hand-looms that take days to set up.
+
+- A single shawl takes 3-5 days
+- Each pattern has a name and meaning
+- The threads are dyed with natural pigments
+
+## Why it matters
+
+When you buy a dhaka product, you're not buying a textile. You're buying a piece of Nepal's living heritage — and keeping an artisan family in their village.`,
+      author: 'Sita Sharma',
+      tags: '["artisans", "weaving", "palpa", "dhaka"]',
+      readingMinutes: 4,
+    },
+    {
+      storeSlug: 'himal-crafts',
+      title: 'The Science of Pashmina: Why Real Cashmere Costs What It Costs',
+      slug: 'science-of-pashmina',
+      excerpt: 'A 200-gram pashmina shawl can cost रू 8,000. Here\'s what goes into the price — and how to spot fakes.',
+      body: `# The Science of Pashmina
+
+A 200-gram pashmina shawl can cost रू 8,000. Here's what goes into the price — and how to spot fakes.
+
+## What is pashmina?
+
+Pashmina is a type of cashmere wool — fiber from the underbelly of the *Capra hircus* goat, which lives above 4,000 meters in the Himalayas.
+
+The fiber diameter is **12-16 microns** — about 1/6 the thickness of human hair. This is what makes it so soft.
+
+## Why it's expensive
+
+- Each goat produces only ~80-170 grams per year
+- Combing and sorting is done entirely by hand
+- Spinning is done on traditional wheels
+- Weaving takes 7-10 days per shawl
+
+## How to spot fakes
+
+Real pashmina doesn't smell of chemicals. It feels warm immediately. Burn a single thread — real pashmina smells of burnt hair; acrylic smells of plastic.`,
+      author: 'Bishnu Thapa',
+      tags: '["pashmina", "cashmere", "guides"]',
+      readingMinutes: 5,
+    },
+    {
+      storeSlug: 'mountain-tea-co',
+      title: 'Why Ilam Tea Tastes Different: A High-Altitude Story',
+      slug: 'ilam-tea-high-altitude',
+      excerpt: 'The tea gardens of Ilam sit at 1,500-2,000 meters. Here\'s how altitude, soil, and mist shape every cup.',
+      body: `# Why Ilam Tea Tastes Different
+
+The tea gardens of Ilam sit at 1,500-2,000 meters. Here's how altitude, soil, and mist shape every cup.
+
+## The terroir of altitude
+
+At 2,000 meters, the air is cooler and the sun is more intense. This combination stresses the tea plant in a way that produces more polyphenols — the compounds that give tea its flavor and aroma.
+
+## Mist matters
+
+Ilam gets morning mist almost every day. This slow drying of the dew on the leaves prevents bitterness and encourages the development of aromatic compounds.
+
+## Hand-plucked, single-estate
+
+Every leaf is plucked by hand. The pickers are paid per kilogram — and a skilled picker can harvest 20-30 kg per day. The leaves are processed within hours of plucking.`,
+      author: 'Anjana Limbu',
+      tags: '["tea", "ilam", "terroir"]',
+      readingMinutes: 3,
+    },
+  ]
+
+  for (const bp of blogPosts) {
+    const store = storeMap.get(bp.storeSlug)
+    if (!store) continue
+    await db.blogPost.create({
+      data: {
+        storeId: store.id,
+        title: bp.title,
+        slug: bp.slug,
+        excerpt: bp.excerpt,
+        body: bp.body,
+        author: bp.author,
+        tags: bp.tags,
+        readingMinutes: bp.readingMinutes,
+        status: 'published',
+        publishedAt: new Date(Date.now() - Math.random() * 14 * 86400000),
+      },
+    })
+  }
+  console.log(`  + ${blogPosts.length} blog posts`)
+
+  // ====== Seed sample influencer + affiliate (Marketing panel) ======
+  const craftStore = storeMap.get('himal-crafts')
+  if (craftStore) {
+    await db.influencer.create({
+      data: {
+        storeId: craftStore.id,
+        name: 'Sita Craft Diaries',
+        handle: '@sitacraftdiaries',
+        email: 'sita@example.com',
+        phone: '9801234567',
+        code: 'sita10',
+        commissionType: 'percent',
+        commissionValue: 1000, // 10%
+        clicks: 234,
+        conversions: 12,
+        revenue: 145000 * 100,
+        commissionEarned: 14500 * 100,
+      },
+    })
+    await db.affiliate.create({
+      data: {
+        storeId: craftStore.id,
+        name: 'Nepal Tech Reviews',
+        email: 'contact@nepaltech.example',
+        code: 'nepaltech',
+        commissionRateBps: 500, // 5%
+        clicks: 567,
+        conversions: 23,
+        revenue: 287000 * 100,
+        commissionEarned: 14350 * 100,
+      },
+    })
+    console.log('  + 1 influencer + 1 affiliate (sample data)')
+  }
+
   console.log('\n✓ Seed complete!')
   console.log(`  ${SEED_STORES.length} stores`)
   console.log(`  ${Object.values(SEED_CATEGORIES_BY_STORE).flat().length} categories`)
   console.log(`  ${SEED_PRODUCTS.length} products`)
   console.log(`  ${sampleCustomers.length * 3} customers`)
   console.log(`  ${orderCounter} orders`)
+  console.log(`  ${blogPosts.length} blog posts`)
+  console.log(`  1 influencer + 1 affiliate`)
 }
 
 seed()
