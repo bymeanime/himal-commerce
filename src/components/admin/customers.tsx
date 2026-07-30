@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/sheet'
 import { formatNPR } from '@/lib/nepal'
 import { Search, Phone, Mail, MapPin, Users, ShoppingBag } from 'lucide-react'
+import { ExportCSVButton } from '@/components/admin/export-csv-button'
 import { useCurrentStore } from '@/lib/use-current-store'
 
 type CustomerRow = {
@@ -55,11 +56,14 @@ export function AdminCustomers() {
 
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-7xl">
-      <div>
-        <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Customers</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {customers.length} customers have ordered from your store.
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Customers</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {customers.length} customers have ordered from your store.
+          </p>
+        </div>
+        {storeId && <ExportCSVButton endpoint="customers" storeId={storeId} />}
       </div>
 
       <div className="relative">

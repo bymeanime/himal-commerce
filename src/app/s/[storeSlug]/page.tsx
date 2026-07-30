@@ -2,6 +2,7 @@ import { db } from '@/lib/db'
 import { Hero } from '@/components/storefront/hero'
 import { ProductGrid } from '@/components/storefront/product-grid'
 import { AboutSection } from '@/components/storefront/about-section'
+import { CategoryGrid } from '@/components/storefront/category-grid'
 import type { Metadata } from 'next'
 
 export const dynamic = 'force-dynamic'
@@ -27,7 +28,7 @@ export default async function StoreHomePage({ params }: Params) {
   const { storeSlug } = await params
   const store = await db.store.findUnique({
     where: { slug: storeSlug },
-    select: { id: true, name: true, tagline: true, description: true, primaryColor: true, accentColor: true },
+    select: { id: true, name: true, slug: true, tagline: true, description: true, primaryColor: true, accentColor: true },
   })
   if (!store) return null
 
@@ -54,6 +55,7 @@ export default async function StoreHomePage({ params }: Params) {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <Hero />
+      <CategoryGrid storeId={store.id} storeSlug={store.slug} />
       <ProductGrid ssrProducts={JSON.parse(JSON.stringify(products))} ssrStoreId={store.id} />
       <AboutSection />
     </>

@@ -2,6 +2,7 @@ import { db } from '@/lib/db'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { AboutSection } from '@/components/storefront/about-section'
+import { buildSocialLinks, SocialIconsRow } from '@/components/storefront/social-links'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Mountain } from 'lucide-react'
@@ -32,9 +33,13 @@ export default async function AboutPage({ params }: Params) {
       id: true, name: true, description: true, tagline: true,
       ownerName: true, address: true, supportEmail: true, supportPhone: true,
       vatRegistered: true, vatNumber: true, panNumber: true,
+      socialFacebook: true, socialInstagram: true, socialTiktok: true,
+      socialYoutube: true, socialTwitter: true, socialViber: true, socialWhatsapp: true,
     },
   })
   if (!store) notFound()
+
+  const socials = buildSocialLinks(store)
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 md:py-16">
@@ -74,6 +79,12 @@ export default async function AboutPage({ params }: Params) {
             {store.supportPhone && <span className="block">{store.supportPhone}</span>}
             {store.supportEmail && <span className="block">{store.supportEmail}</span>}
           </p>
+          {socials.length > 0 && (
+            <div className="mt-3">
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2">Follow us</p>
+              <SocialIconsRow socials={socials} size="sm" />
+            </div>
+          )}
         </div>
       </div>
 

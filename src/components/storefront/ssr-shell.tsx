@@ -7,6 +7,9 @@ import { StorefrontFooter } from './footer'
 import { CartDrawer } from './cart-drawer'
 import { CheckoutModal } from './checkout-modal'
 import { CookieConsent } from './cookie-consent'
+import { AnnouncementBar } from './announcement-bar'
+import { MarketingPixels } from './marketing-pixels'
+import { ExitIntentPopup, SocialProofToast } from './cro-bundle'
 import { useUI } from '@/lib/ui-store'
 import type { Store, Category } from '@/lib/types'
 
@@ -18,6 +21,7 @@ type SimplifiedStore = Pick<Store,
   | 'socialViber' | 'socialWhatsapp'
   | 'vatRegistered' | 'vatNumber'
   | 'codRiskThreshold' | 'freeShippingThreshold' | 'refundPolicyDays'
+  | 'announcementBar' | 'marketingConfig'
 > & { categories: Pick<Category, 'id' | 'name' | 'slug' | 'icon'>[] }
 
 export function StorefrontShell({
@@ -49,12 +53,16 @@ export function StorefrontShell({
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
+      <AnnouncementBar />
       <StorefrontHeader />
       <main className="flex-1">{children}</main>
       <StorefrontFooter />
       <CartDrawer />
       <CheckoutModal />
       <CookieConsent />
+      <MarketingPixels />
+      <ExitIntentPopup />
+      <SocialProofToast />
     </div>
   )
 }

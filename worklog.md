@@ -1546,3 +1546,78 @@ Deferred to Phase 5 (needs external accounts/credentials):
 - Sentry activation — needs SENTRY_DSN env var in Vercel dashboard
 - Affiliate self-serve partner portal — admin dashboard done, partner-
   facing portal is Phase 5
+
+---
+Task ID: 5-deploy
+Agent: main (super-z)
+Task: Push 3 unpushed commits (Phase 4 work + worklog) to GitHub and verify Vercel production deploy
+
+Work Log:
+- Verified local state: branch `main` was 3 commits ahead of `origin/main`
+  - `7681dbb` feat: Phase 4 — customer portal, coupons, returns UIs
+  - `e12cca0` docs: update worklog with Phase 4 summary
+  - `a90ce1a` mode-only chmod sweep (no content change)
+- Pushed all 3 commits to `origin/main` using GitHub PAT inline as URL credential (not persisted in .git/config)
+- Confirmed remote head moved from `064acca` → `a90ce1a`
+- Polled Vercel API: deploy `dpl_6Zqh5r` for commit `a90ce1a` transitioned BUILDING → READY
+- Smoke-tested production at https://himal-commerce.vercel.app:
+  - `/` → 200 (homepage 31KB, TTFB 801ms)
+  - `/api/health` → 200, body `{"status":"ok","db":"ok","latencyMs":219,"version":"0.4.0"}`
+  - `/api/dashboard`, `/api/coupons`, `/api/returns`, `/api/reviews`, `/api/abandoned-carts`, `/api/products` → 400 (expected — require `storeId` query param)
+  - `/api/newsletter` → 405 (expected — POST-only)
+- Tokens used inline only; not written to any file under /home/z/my-project
+
+Stage Summary:
+- Production is live on commit `a90ce1a` (version 0.4.0) at https://himal-commerce.vercel.app
+- All Phase 4 features (customer portal, coupons, returns, abandoned carts) are deployed and reachable
+- Neon Postgres connection healthy (latencyMs=219)
+- Ready to start Phase 5: product variants, categories, social links, expert-panel audit enhancements
+
+---
+Task ID: 5-phase5
+Agent: main (super-z)
+Task: Phase 5 — finish remaining e-commerce features (categories SSR nav, social links, admin audit log, CSV exports, affiliate attribution, GA4/Meta Pixel, announcement bar, CRO components, expanded Settings)
+
+Work Log:
+- Audited prior session work via Explore subagent: confirmed ProductVariants, Categories, Blog, Returns, Coupons, Abandoned Carts already wired end-to-end. Identified 10 remaining gaps.
+- Created `src/components/storefront/social-links.tsx` — shared SocialIconsRow + buildSocialLinks helper that sanitizes URLs and converts Viber/WhatsApp phone numbers to deep links (viber://chat, https://wa.me/). Replaces 3 inline copies in footer + contact + about.
+- Updated `src/components/storefront/footer.tsx` to use the shared SocialIconsRow.
+- Updated `src/app/s/[storeSlug]/about/page.tsx` to fetch all 7 social fields and render a "Follow us" icon row in the Contact card.
+- Updated `src/components/storefront/header.tsx` — replaced SPA-state category navigation (`setSelectedCategorySlug + setStoreSection('category')`) with proper Next.js `<Link href="/s/{slug}/c/{cat.slug}">` in both desktop dropdown and mobile sheet. This makes the SSR category page reachable from primary nav (previously only reachable via sitemap/breadcrumb/direct URL).
+- Created `src/components/storefront/category-grid.tsx` — server component that fetches top-level categories with product counts + subcategory chips, renders a "Shop by category" card grid on the storefront homepage.
+- Wired `CategoryGrid` into `src/app/s/[storeSlug]/page.tsx` between Hero and ProductGrid.
+- Updated `src/app/api/checkout/route.ts` — when `referrer` is present (set by middleware from `?ref=CODE` cookie), looks up Affiliate or Influencer by code, computes commission (percent or fixed), populates `Order.affiliateId` + `Order.commissionAmount`, and atomically increments the partner's `conversions` / `revenue` / `commissionEarned` counters inside the existing checkout transaction. Closes the affiliate attribution loop that was previously broken.
+- Updated `src/components/storefront/checkout-modal.tsx` — sends `referrer` (read from `himal-ref` cookie via `getReferrer()`) + `utm.lastTouch` + `couponCode` in the checkout POST body. Previously these fields were not sent even though the API accepted them.
+- Created `src/app/api/export/products/route.ts` and `src/app/api/export/customers/route.ts` — mirror the existing orders CSV export. UTF-8 BOM included for Excel compatibility with Nepali characters.
+- Created `src/components/admin/export-csv-button.tsx` — reusable client component that triggers a CSV download and shows a spinner + toast.
+- Wired ExportCSVButton into AdminOrders (next to status filter), AdminCustomers (top-right), AdminProducts (next to "New product" button).
+- Created `src/app/api/audit-logs/route.ts` — GET with storeId + optional entity/action filters, paginated.
+- Created `src/components/admin/audit-log.tsx` — admin viewer with entity/action filters, search, color-coded before/after JSON diff. Wired into admin nav as "Audit Log" with ScrollText icon.
+- Updated `src/lib/ui-store.ts` + `src/components/admin/admin-shell.tsx` + `src/components/admin/admin.tsx` to add the new `audit` admin section.
+- Created `src/components/storefront/marketing-pixels.tsx` — consent-gated GA4 / Meta Pixel / TikTok Pixel script injector. Polls localStorage for cookie consent level every 2s for 30s, only injects scripts when level === 'all'. Reads pixel IDs from `Store.marketingConfig` JSON.
+- Created `src/components/storefront/announcement-bar.tsx` — renders a colored banner above the storefront header from `Store.announcementBar` JSON. Supports internal Next.js Link paths and external URLs.
+- Wired both components into `src/components/storefront/ssr-shell.tsx` (extended SimplifiedStore Pick to include `announcementBar` + `marketingConfig`).
+- Massively expanded `src/components/admin/settings.tsx`:
+  - Added Viber + WhatsApp inputs to the SOCIALS array (was missing — admin form had only 5 of 7 socials)
+  - Added "Tax & legal" card: PAN, VAT, business reg #, VAT invoice prefix, VAT-registered switch, default tax rate, tax-inclusive display switch
+  - Expanded "Shipping & COD" card with editable COD risk threshold, free shipping threshold, plus existing static zone rates display
+  - Added "Policies" card: refund window days, custom return policy text, custom shipping policy text
+  - Added "Announcement bar" card with live preview: message, bg color, text color, optional link
+  - Added "Analytics & pixels" card: GA4 ID, Meta Pixel ID, TikTok Pixel ID inputs (writes to marketingConfig JSON)
+  - Bumped version reference v0.3 → v0.6
+- Created `src/components/storefront/cro-bundle.tsx` — three CRO components:
+  - `ExitIntentPopup`: detects mouse-out-top (desktop) or fast scroll-up (mobile), shows 10% discount code popup. Once-per-session via sessionStorage. Suppressed on cart/checkout/orders/admin.
+  - `UrgencyTimer`: shows "Order in HH:MM:SS for next-day dispatch" countdown on PDPs only.
+  - `SocialProofToast`: shows rotating "Bishnu from Kathmandu just bought a cashmere shawl" notifications every 15-45s, max 3 per session, suppressed on admin/api/checkout routes.
+- Wired ExitIntentPopup + SocialProofToast into SSR shell, UrgencyTimer into the PDP trust-signals block.
+- Bumped version 0.5.0 → 0.6.0 in package.json.
+- TypeScript check + Next.js build both pass with zero errors.
+
+Stage Summary:
+- All 4 remaining feature gaps from the prior audit are closed (categories SSR nav, social links, audit log viewer, CSV exports).
+- Major platform-level enhancements: affiliate attribution loop wired end-to-end, GA4/Meta Pixel injection (consent-aware), announcement bar, CRO bundle.
+- Admin Settings form now exposes ~20 previously-hidden schema fields (VAT/tax/shipping/policies/announcement/marketing config).
+- New API routes: /api/audit-logs, /api/export/products, /api/export/customers
+- New components: social-links, category-grid, export-csv-button, audit-log, marketing-pixels, announcement-bar, cro-bundle (3 components)
+- Files changed: 16 modified + 9 new = 25 total
+- Version: 0.5.0 → 0.6.0

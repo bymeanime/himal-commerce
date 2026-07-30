@@ -29,6 +29,7 @@ import { formatNPR, NEPAL_PROVINCES, calcShippingCost, getProvince, PAYMENT_METH
 import { Truck, Wallet, Banknote, CheckCircle2, ArrowLeft, ArrowRight, MapPin, User, CreditCard } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { getReferrer, getUTM } from '@/lib/analytics-client'
 
 type Step = 'shipping' | 'payment' | 'review' | 'success'
 
@@ -160,9 +161,10 @@ export function CheckoutModal() {
           shippingDistrict: form.district,
           paymentMethod: form.paymentMethod,
           notes: form.notes || undefined,
-          couponId: appliedCoupon?.id || undefined,
-          discountAmount: appliedCoupon?.discountAmount || undefined,
-          freeShipping: appliedCoupon?.freeShipping || undefined,
+          couponCode: appliedCoupon?.code || undefined,
+          // Affiliate attribution (read from himal-ref cookie) + UTM (Marketing panel)
+          referrer: getReferrer() || undefined,
+          utm: getUTM()?.lastTouch || undefined,
           items: items.map((i) => ({
             productId: i.productId,
             variantId: i.variantId ?? undefined,

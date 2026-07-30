@@ -36,6 +36,7 @@ import {
 import { formatNPR } from '@/lib/nepal'
 import type { Product, Category } from '@/lib/types'
 import { useCurrentStore } from '@/lib/use-current-store'
+import { ExportCSVButton } from '@/components/admin/export-csv-button'
 import { Plus, Search, Pencil, Trash2, Package, MapPin, Hammer, Eye, EyeOff, X, GripVertical } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -104,9 +105,12 @@ export function AdminProducts() {
             {products.length} products in your catalog.
           </p>
         </div>
-        <Button onClick={() => setCreating(true)}>
-          <Plus className="h-4 w-4 mr-1" /> New product
-        </Button>
+        <div className="flex items-center gap-2">
+          {storeId && <ExportCSVButton endpoint="products" storeId={storeId} />}
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="h-4 w-4 mr-1" /> New product
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}

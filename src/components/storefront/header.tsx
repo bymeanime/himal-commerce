@@ -32,7 +32,6 @@ export function StorefrontHeader() {
   const openCart = useCart((s) => s.open)
   const wishlistCount = useWishlist((s) => s.productIds.length)
   const setStoreSection = useUI((s) => s.setStoreSection)
-  const setSelectedCategorySlug = useUI((s) => s.setSelectedCategorySlug)
   const exitToPlatform = useUI((s) => s.exitToPlatform)
   const { store, storeId } = useCurrentStore()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -58,10 +57,8 @@ export function StorefrontHeader() {
     { href: `/s/${store.slug}/contact`, label: 'Contact', icon: Mail },
   ] : []
 
-  const goToCategory = (slug: string) => {
-    setSelectedCategorySlug(slug)
-    setStoreSection('category')
-  }
+  // Build SSR URL for a category — uses /s/[storeSlug]/c/[categorySlug]
+  const categoryHref = (slug: string) => store ? `/s/${store.slug}/c/${slug}` : '#'
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border/60 bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70">
@@ -130,8 +127,8 @@ export function StorefrontHeader() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
                 {categories.map((c) => (
-                  <DropdownMenuItem key={c.id} onClick={() => goToCategory(c.slug)}>
-                    {c.name}
+                  <DropdownMenuItem key={c.id} asChild>
+                    <Link href={categoryHref(c.slug)}>{c.name}</Link>
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
@@ -218,15 +215,14 @@ export function StorefrontHeader() {
                       Categories
                     </div>
                     {categories.map((c) => (
-                      <Button
+                      <Link
                         key={c.id}
-                        variant="ghost"
-                        size="sm"
-                        className="justify-start text-sm text-foreground/70"
-                        onClick={() => { goToCategory(c.slug); setMenuOpen(false) }}
+                        href={categoryHref(c.slug)}
+                        className="block px-3 py-2 rounded-md hover:bg-secondary text-sm text-foreground/70"
+                        onClick={() => setMenuOpen(false)}
                       >
                         {c.name}
-                      </Button>
+                      </Link>
                     ))}
                   </>
                 )}

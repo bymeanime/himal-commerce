@@ -13,6 +13,7 @@ import { AdminReviews } from './reviews'
 import { AdminAbandonedCarts } from './abandoned-carts'
 import { AdminCoupons } from './coupons'
 import { AdminReturns } from './returns'
+import { AdminAuditLog } from './audit-log'
 import { useUI } from '@/lib/ui-store'
 import { useCurrentStore } from '@/lib/use-current-store'
 import { Button } from '@/components/ui/button'
@@ -50,6 +51,7 @@ export function Admin() {
       {section === 'returns' && <AdminReturns />}
       {section === 'blog' && <AdminBlog />}
       {section === 'marketing' && <AdminMarketing />}
+      {section === 'audit' && <AdminAuditLog />}
       {section === 'settings' && <AdminSettings />}
     </AdminShell>
   )

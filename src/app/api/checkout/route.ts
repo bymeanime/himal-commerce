@@ -244,6 +244,40 @@ export async function POST(req: NextRequest) {
   }
   const finalTotal = Math.max(0, total - discountAmount)
 
+  // ====== AFFILIATE / INFLUENCER ATTRIBUTION (Marketing panel P0) ======
+  // If a `referrer` code is present (from the himal-ref cookie set by middleware
+  // when a visitor arrives via ?ref=CODE), look up the matching Affiliate or
+  // Influencer for this store and compute the commission. The attribution is
+  // persisted on the Order and the partner's counters are incremented inside
+  // the same transaction below.
+  let affiliateId: string | undefined
+  let affiliateKind: 'affiliate' | 'influencer' | null = null
+  let commissionAmount = 0
+  if (referrer) {
+    // Try Affiliate first (more common), then Influencer
+    const affiliate = await db.affiliate.findUnique({
+      where: { storeId_code: { storeId, code: referrer } },
+    })
+    if (affiliate && affiliate.status === 'active') {
+      affiliateId = affiliate.id
+      affiliateKind = 'affiliate'
+      commissionAmount = Math.round(finalTotal * affiliate.commissionRateBps / 10000)
+    } else {
+      const influencer = await db.influencer.findUnique({
+        where: { storeId_code: { storeId, code: referrer } },
+      })
+      if (influencer && influencer.status === 'active') {
+        affiliateId = influencer.id
+        affiliateKind = 'influencer'
+        if (influencer.commissionType === 'percent') {
+          commissionAmount = Math.round(finalTotal * influencer.commissionValue / 10000)
+        } else {
+          commissionAmount = Math.min(influencer.commissionValue, finalTotal)
+        }
+      }
+    }
+  }
+
   // ====== ATOMIC CHECKOUT (Tech + Ops panels) ======
   // Everything below runs in a single transaction. If inventory decrement
   // fails for any item (race condition), the entire order creation rolls back.
@@ -352,6 +386,8 @@ export async function POST(req: NextRequest) {
           heldReason: orderStatus === 'on_hold' ? 'High-value COD pending verification' : null,
           utm: utm ? JSON.stringify(utm) : null,
           referrer: referrer || null,
+          affiliateId: affiliateId || null,
+          commissionAmount,
           couponId: couponId || null,
           items: {
             create: lineItems.map(it => ({
@@ -385,6 +421,27 @@ export async function POST(req: NextRequest) {
         await tx.coupon.update({
           where: { id: couponId },
           data: { usageCount: { increment: 1 } },
+        })
+      }
+
+      // 9b. Increment affiliate / influencer counters (Marketing panel P0)
+      if (affiliateId && affiliateKind === 'affiliate') {
+        await tx.affiliate.update({
+          where: { id: affiliateId },
+          data: {
+            conversions: { increment: 1 },
+            revenue: { increment: finalTotal },
+            commissionEarned: { increment: commissionAmount },
+          },
+        })
+      } else if (affiliateId && affiliateKind === 'influencer') {
+        await tx.influencer.update({
+          where: { id: affiliateId },
+          data: {
+            conversions: { increment: 1 },
+            revenue: { increment: finalTotal },
+            commissionEarned: { increment: commissionAmount },
+          },
         })
       }
 

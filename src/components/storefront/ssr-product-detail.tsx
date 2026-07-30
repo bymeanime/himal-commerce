@@ -13,6 +13,7 @@ import { ShareRow } from '@/components/storefront/share-row'
 import { ProductReviews } from '@/components/storefront/product-reviews'
 import { WishlistButton } from '@/components/storefront/wishlist-button'
 import { track, captureUTM } from '@/lib/analytics-client'
+import { UrgencyTimer } from '@/components/storefront/cro-bundle'
 import type { Product, ProductVariant, ProductReview } from '@/lib/types'
 import {
   Minus, Plus, ShoppingCart, MapPin, Hammer, Package, X, Layers,
@@ -311,6 +312,9 @@ export function SsrProductDetail({ product }: { product: ProductWithRelations })
             title={product.title}
             url={`/s/${storeSlug}/p/${product.slug}`}
           />
+
+          {/* Urgency timer — encourages faster checkout (CRO panel) */}
+          <UrgencyTimer />
 
           {/* Trust signals */}
           <div className="grid grid-cols-3 gap-2 pt-2">

@@ -37,12 +37,13 @@ import {
   AlertTriangle,
   Ticket,
   RotateCcw,
+  ScrollText,
 } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import type { Store } from '@/lib/types'
 
-type Section = 'dashboard' | 'products' | 'orders' | 'customers' | 'categories' | 'blog' | 'marketing' | 'reviews' | 'abandoned' | 'coupons' | 'returns' | 'settings'
+type Section = 'dashboard' | 'products' | 'orders' | 'customers' | 'categories' | 'blog' | 'marketing' | 'reviews' | 'abandoned' | 'coupons' | 'returns' | 'audit' | 'settings'
 
 const NAV: { id: Section; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -56,6 +57,7 @@ const NAV: { id: Section; label: string; icon: React.ComponentType<{ className?:
   { id: 'returns', label: 'Returns', icon: RotateCcw },
   { id: 'blog', label: 'Blog', icon: FileText },
   { id: 'marketing', label: 'Marketing', icon: Megaphone },
+  { id: 'audit', label: 'Audit Log', icon: ScrollText },
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
 
