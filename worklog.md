@@ -1444,3 +1444,105 @@ Remaining (Phase 4 — needs external accounts/credentials):
 - Admin coupons management UI (API exists, UI not yet built)
 - Admin returns management UI (API exists, UI not yet built — currently
   returns are visible in the order history timeline)
+
+---
+Task ID: phase-4
+Agent: main (Super Z)
+Task: Complete the "proper ecommerce website portal" — customer-facing portal pages, admin Coupons & Returns UIs, public order-lookup endpoint
+
+Work Log:
+- Read full worklog + Prisma schema + key storefront/admin files to understand
+  the v0.5.0 state (Phases 1-3 already implemented SSR routes, blog, reviews,
+  wishlist button, abandoned carts, coupons API, returns API, dashboard
+  analytics, live FX, Sentry stub)
+- Built storefront customer portal (3 new SSR routes):
+  * /s/[slug]/orders — "Find my order" lookup by phone + order number; shows
+    full order details, status timeline, tracking info, items, totals, and a
+    "Request return" dialog (reason code + free-text reason)
+  * /s/[slug]/wishlist — page that lists all saved products (uses the existing
+    wishlist-store session key + fetches product details via new ?ids= filter)
+  * /s/[slug]/contact — store contact info, social media links (with sanitized
+    URLs), WhatsApp deep link, and a contact form (stored as AnalyticsEvent
+    type 'contact_message' + AuditLog entry; soft rate-limit of 10 minutes
+    per phone)
+- Built admin UIs (2 new components):
+  * AdminCoupons — list with status filter, create dialog supporting all 3
+    types (percent / fixed / free_shipping), pause/activate toggle, delete,
+    with scheduling (startsAt / endsAt) and limits (minSubtotal /
+    maxRedemptions)
+  * AdminReturns — list with status filter, resolve dialog with status-flow
+    validation (requested→approved→received→refunded/exchanged, or
+    rejected), refund amount + method entry for refund transitions
+- Wired both into admin nav (admin-shell.tsx + admin.tsx + ui-store types)
+- Added 2 new public API endpoints:
+  * POST /api/orders/lookup — secure public order lookup (requires BOTH phone
+    AND orderNumber; phone normalization handles +977 prefix; returns only
+    safe fields — strips internalNotes, codRiskScore, affiliateId, etc.)
+  * POST /api/contact — public contact form with phone/email validation,
+    10-minute rate limit per phone, audit log entry
+- Extended GET /api/products to accept ?ids=id1,id2,... for fetching by
+  explicit ID list (used by the wishlist page)
+- Updated storefront header: added wishlist (with count badge), My Orders,
+  and Contact icons in the top bar (desktop) + mobile menu
+- Updated storefront footer: added Wishlist, Find my order, Contact us links
+  under the Shop column
+- Updated sitemap.ts: added /s/[slug]/contact route (wishlist and /orders
+  are noindex per-route)
+- Added tests/unit/order-lookup.test.ts (7 tests) covering phone
+  normalization: spaces/dashes/parens stripping, +977 prefix matching in
+  both directions, empty-input rejection, different-number rejection
+
+Build verification:
+- typecheck (tsc --noEmit): clean — 0 errors
+- tests (vitest run): 75/75 pass in ~1.7s (was 68; added 7 new)
+- next build: 53 routes registered (was 50), 0 errors, all new routes show
+  as ƒ (Dynamic, server-rendered on demand)
+- New routes confirmed in build output: /api/contact, /api/orders/lookup,
+  /s/[slug]/contact, /s/[slug]/orders, /s/[slug]/wishlist
+
+Stage Summary:
+- Commit: 7681dbb "feat: Phase 4 — customer portal (order lookup, wishlist,
+  contact), admin Coupons & Returns UIs"
+- 18 files changed, +2180/-7 lines
+- Build, typecheck, and tests all green
+- Push to GitHub + Vercel auto-deploy NOT done from this environment —
+  the previous session's git credentials (~/.git-credentials) and Vercel
+  token (~/.config/vercel/token) don't persist across sessions. User
+  needs to run `git push origin main` from their own machine (Vercel
+  GitHub integration will auto-deploy on push).
+
+What this completes (cumulative across Phases 1-4):
+- Multi-tenant commerce platform with 3 stores seeded (himal-crafts,
+  mountain-teas, nepali-pashmina)
+- Product catalog with variants (size/color/weight), categories with
+  hierarchy, barcodes/GTIN, rich content (specs, artisan story, care guide)
+- SSR storefront routes: home, product, category, about, blog, search,
+  wishlist, orders, contact (all SEO-friendly with JSON-LD)
+- Customer self-service: order lookup, return requests, wishlist, contact
+- Admin dashboard: orders (4-tab drawer), products (with variants editor),
+  categories, customers, reviews moderation, abandoned carts, coupons,
+  returns, blog CMS, marketing (influencer+affiliate), settings
+- Finance: VAT/PAN fields, invoice numbers (BS fiscal year), refunds,
+  seller payouts, multi-currency with live NRB rates
+- Logistics: Nepal districts (77), shipping zones, COD risk scoring,
+  structured address (ward/municipality), courier + tracking
+- Compliance: privacy/terms/refund/shipping/cookie policy pages,
+  cookie consent banner, GDPR consent fields on Customer
+- Operations: order events timeline, internal vs customer notes,
+  status transition validation, cron jobs (abandoned cart + low-stock)
+- Marketing: coupons, abandoned cart recovery, influencer/affiliate
+  programs with referral codes, blog/CMS with markdown + tags
+- Quality: 75 tests (cart logic, currency, BS calendar, phone validation,
+  tenant isolation, order lookup), error boundaries, typecheck, ESLint,
+  GitHub Actions CI
+- Security: multi-tenant IDOR protection on all detail endpoints, CSRF
+  middleware, URL sanitization, env validation, rate-limit-ready
+
+Deferred to Phase 5 (needs external accounts/credentials):
+- Real next-auth + phone OTP via SparrowSMS — needs verified Nepal SMS
+  gateway account
+- Real eSewa/Khalti gateway integration — needs per-store merchant
+  credentials + callback endpoint
+- Sentry activation — needs SENTRY_DSN env var in Vercel dashboard
+- Affiliate self-serve partner portal — admin dashboard done, partner-
+  facing portal is Phase 5
