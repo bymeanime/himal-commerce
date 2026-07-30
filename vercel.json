@@ -9,8 +9,8 @@
     "silent": false
   },
   "crons": [
-    { "path": "/api/cron/abandoned-cart", "schedule": "0 * * * *" },
-    { "path": "/api/cron/low-stock", "schedule": "0 9 * * *" }
+    { "path": "/api/cron/abandoned-cart", "schedule": "0 9 * * *" },
+    { "path": "/api/cron/low-stock", "schedule": "0 10 * * *" }
   ],
   "env": {
     "DATABASE_PROVIDER": "postgresql",
