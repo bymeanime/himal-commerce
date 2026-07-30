@@ -49,6 +49,17 @@ export function CheckoutModal() {
 
   const [step, setStep] = useState<Step>('shipping')
   const [submitting, setSubmitting] = useState(false)
+  const [couponCode, setCouponCode] = useState('')
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    id: string
+    code: string
+    type: string
+    value: number
+    discountAmount: number
+    freeShipping: boolean
+  } | null>(null)
+  const [couponError, setCouponError] = useState('')
+  const [validatingCoupon, setValidatingCoupon] = useState(false)
   const [form, setForm] = useState({
     name: '',
     phone: '',
@@ -60,9 +71,49 @@ export function CheckoutModal() {
     notes: '',
   })
 
-  const shippingCost = useMemo(() => calcShippingCost(form.district), [form.district])
-  const total = subtotal + shippingCost
+  const shippingCost = useMemo(() => {
+    if (appliedCoupon?.freeShipping) return 0
+    return calcShippingCost(form.district)
+  }, [form.district, appliedCoupon])
+  const discountAmount = appliedCoupon?.discountAmount ?? 0
+  const total = Math.max(0, subtotal + shippingCost - discountAmount)
   const province = form.district ? getProvince(form.district) : null
+
+  const validateCoupon = async () => {
+    if (!couponCode.trim() || !storeId) return
+    setValidatingCoupon(true)
+    setCouponError('')
+    try {
+      const res = await fetch('/api/coupons', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'validate',
+          storeId,
+          code: couponCode,
+          subtotal,
+        }),
+      })
+      const data = await res.json()
+      if (data.valid) {
+        setAppliedCoupon(data)
+        setCouponCode('')
+        toast.success(`Coupon "${data.coupon.code}" applied!`)
+      } else {
+        setCouponError(data.error || 'Invalid coupon')
+        setAppliedCoupon(null)
+      }
+    } catch {
+      setCouponError('Failed to validate coupon')
+    } finally {
+      setValidatingCoupon(false)
+    }
+  }
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null)
+    setCouponError('')
+  }
 
   const canProceedShipping =
     form.name.trim() &&
@@ -109,6 +160,9 @@ export function CheckoutModal() {
           shippingDistrict: form.district,
           paymentMethod: form.paymentMethod,
           notes: form.notes || undefined,
+          couponId: appliedCoupon?.id || undefined,
+          discountAmount: appliedCoupon?.discountAmount || undefined,
+          freeShipping: appliedCoupon?.freeShipping || undefined,
           items: items.map((i) => ({
             productId: i.productId,
             variantId: i.variantId ?? undefined,
@@ -126,6 +180,7 @@ export function CheckoutModal() {
       const { order } = await res.json()
       setLastOrderNumber(order.orderNumber)
       clear()
+      setAppliedCoupon(null)
       setStep('success')
       toast.success('Order placed successfully!')
     } catch (e) {
@@ -343,9 +398,16 @@ export function CheckoutModal() {
                 <span className="text-muted-foreground">Subtotal</span>
                 <span>{formatNPR(subtotal)}</span>
               </div>
+              {discountAmount > 0 && (
+                <div className="flex justify-between text-emerald-700">
+                  <span>Discount {appliedCoupon && `(${appliedCoupon.code})`}</span>
+                  <span>-{formatNPR(discountAmount)}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">
                   Shipping {form.district && `to ${form.district}`}
+                  {appliedCoupon?.freeShipping && ' (FREE)'}
                 </span>
                 <span>{formatNPR(shippingCost)}</span>
               </div>
@@ -354,6 +416,50 @@ export function CheckoutModal() {
                 <span>Total</span>
                 <span className="text-primary">{formatNPR(total)}</span>
               </div>
+            </div>
+
+            {/* Coupon input */}
+            <div className="space-y-2">
+              {appliedCoupon ? (
+                <div className="flex items-center justify-between rounded-lg border border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="bg-emerald-100 text-emerald-800 border-emerald-300">
+                      {appliedCoupon.code}
+                    </Badge>
+                    <span className="text-xs text-emerald-700 dark:text-emerald-400">
+                      {appliedCoupon.type === 'percent'
+                        ? `${appliedCoupon.value / 100}% off`
+                        : appliedCoupon.type === 'fixed'
+                        ? `${formatNPR(appliedCoupon.value)} off`
+                        : 'Free shipping'}
+                    </span>
+                  </div>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={removeCoupon}>
+                    Remove
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Input
+                    value={couponCode}
+                    onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); setCouponError('') }}
+                    placeholder="Coupon code"
+                    className="flex-1"
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); validateCoupon() } }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={validateCoupon}
+                    disabled={validatingCoupon || !couponCode.trim()}
+                  >
+                    {validatingCoupon ? 'Checking…' : 'Apply'}
+                  </Button>
+                </div>
+              )}
+              {couponError && (
+                <p className="text-xs text-destructive">{couponError}</p>
+              )}
             </div>
 
             <div className="flex justify-between pt-2">
@@ -431,6 +537,12 @@ export function CheckoutModal() {
                 <span className="text-muted-foreground">Subtotal</span>
                 <span>{formatNPR(subtotal)}</span>
               </div>
+              {discountAmount > 0 && (
+                <div className="flex justify-between text-emerald-700">
+                  <span>Discount {appliedCoupon && `(${appliedCoupon.code})`}</span>
+                  <span>-{formatNPR(discountAmount)}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Shipping</span>
                 <span>{formatNPR(shippingCost)}</span>

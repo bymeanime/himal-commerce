@@ -4,18 +4,31 @@
 
 export async function register() {
   // Sentry initialization (only if DSN is configured)
-  // To enable: install @sentry/nextjs and set SENTRY_DSN env var
   if (process.env.SENTRY_DSN) {
     try {
-      // Dynamic import so we don't ship Sentry code unless configured
-      // const Sentry = await import('@sentry/nextjs')
-      // Sentry.init({
-      //   dsn: process.env.SENTRY_DSN,
-      //   tracesSampleRate: 0.1, // 10% of transactions traced
-      //   environment: process.env.NODE_ENV,
-      //   release: process.env.VERCEL_GIT_COMMIT_SHA,
-      // })
-      console.log('[instrumentation] SENTRY_DSN set but @sentry/nextjs not installed — install to enable')
+      const Sentry = await import('@sentry/nextjs')
+      Sentry.init({
+        dsn: process.env.SENTRY_DSN,
+        tracesSampleRate: 0.1, // 10% of transactions traced
+        environment: process.env.NODE_ENV,
+        release: process.env.VERCEL_GIT_COMMIT_SHA,
+        // Filter noisy errors
+        ignoreErrors: [
+          'NEXT_NOT_FOUND',
+          'NEXT_REDIRECT',
+          // Browser extensions
+          'top.GLOBALS',
+          'ResizeObserver loop',
+        ],
+        denyUrls: [
+          // Chrome extensions
+          /extensions\//i,
+          /^chrome:\/\//i,
+        ],
+      })
+      if (process.env.NODE_ENV === 'production') {
+        console.log('[instrumentation] Sentry initialized')
+      }
     } catch (e) {
       console.warn('[instrumentation] Sentry init failed:', e)
     }

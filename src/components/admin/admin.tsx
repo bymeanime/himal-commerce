@@ -9,6 +9,8 @@ import { AdminCategories } from './categories'
 import { AdminSettings } from './settings'
 import { AdminBlog } from './blog'
 import { AdminMarketing } from './marketing'
+import { AdminReviews } from './reviews'
+import { AdminAbandonedCarts } from './abandoned-carts'
 import { useUI } from '@/lib/ui-store'
 import { useCurrentStore } from '@/lib/use-current-store'
 import { Button } from '@/components/ui/button'
@@ -40,8 +42,10 @@ export function Admin() {
       {section === 'orders' && <AdminOrders />}
       {section === 'customers' && <AdminCustomers />}
       {section === 'categories' && <AdminCategories />}
+      {section === 'reviews' && <AdminReviews />}
       {section === 'blog' && <AdminBlog />}
       {section === 'marketing' && <AdminMarketing />}
+      {section === 'abandoned' && <AdminAbandonedCarts />}
       {section === 'settings' && <AdminSettings />}
     </AdminShell>
   )

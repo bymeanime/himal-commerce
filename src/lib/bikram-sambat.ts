@@ -42,10 +42,14 @@ export function adToBs(date: Date): BSDate {
   const adMonth = date.getMonth() + 1 // 1-12
   const adDay = date.getDate()
 
-  // New year transition: BS new year starts around April 13/14
-  let bsYear = adYear + 56
-  if (adMonth < 4 || (adMonth === 4 && adDay < 14)) {
-    bsYear = adYear + 57 // we're still in previous BS year
+  // New year transition: BS new year starts around April 13/14.
+  // Before April 14 (e.g. January 2024): we're in the BS year that started
+  //   last April → BS year = AD year + 56 (e.g. 2024 → 2080).
+  // On/after April 14 (e.g. May 2024): we're in the BS year that started
+  //   this April → BS year = AD year + 57 (e.g. 2024 → 2081).
+  let bsYear = adYear + 56 // default: before April 14 → previous BS year
+  if (adMonth > 4 || (adMonth === 4 && adDay >= 14)) {
+    bsYear = adYear + 57 // on/after April 14 → new BS year
   }
 
   // Approximate day-of-year → BS month/day mapping

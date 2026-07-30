@@ -4,7 +4,7 @@ import { persist } from 'zustand/middleware'
 // Top-level view switcher (since only `/` route is allowed)
 type View = 'platform' | 'storefront' | 'admin'
 type StoreSection = 'home' | 'products' | 'about' | 'category'
-type AdminSection = 'dashboard' | 'products' | 'orders' | 'customers' | 'categories' | 'blog' | 'marketing' | 'settings'
+type AdminSection = 'dashboard' | 'products' | 'orders' | 'customers' | 'categories' | 'blog' | 'marketing' | 'reviews' | 'abandoned' | 'settings'
 type PlatformSection = 'home' | 'stores' | 'super-admin'
 
 type UIState = {

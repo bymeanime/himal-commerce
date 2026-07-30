@@ -10,11 +10,13 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { formatNPR } from '@/lib/nepal'
 import { ShareRow } from '@/components/storefront/share-row'
+import { ProductReviews } from '@/components/storefront/product-reviews'
+import { WishlistButton } from '@/components/storefront/wishlist-button'
 import { track, captureUTM } from '@/lib/analytics-client'
-import type { Product, ProductVariant } from '@/lib/types'
+import type { Product, ProductVariant, ProductReview } from '@/lib/types'
 import {
   Minus, Plus, ShoppingCart, MapPin, Hammer, Package, X, Layers,
-  RotateCcw, Shield, ChevronRight, Home as HomeIcon,
+  RotateCcw, Shield, ChevronRight, Home as HomeIcon, Heart,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -23,6 +25,7 @@ type ProductWithRelations = Product & {
   category: { name: string; slug: string } | null
   variants: ProductVariant[]
   images: { id: string; url: string; altText: string | null; sortOrder: number }[]
+  reviews?: ProductReview[]
 }
 
 export function SsrProductDetail({ product }: { product: ProductWithRelations }) {
@@ -256,7 +259,7 @@ export function SsrProductDetail({ product }: { product: ProductWithRelations })
           <Separator />
 
           {/* Quantity + add to cart */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <div className="flex items-center border border-border rounded-lg">
               <Button
                 variant="ghost"
@@ -287,6 +290,12 @@ export function SsrProductDetail({ product }: { product: ProductWithRelations })
               <ShoppingCart className="h-4 w-4 mr-2" />
               Add {qty} to cart · {formatNPR(effectivePrice * qty)}
             </Button>
+            <WishlistButton
+              productId={product.id}
+              variantId={selectedVariant?.id}
+              size="default"
+              className="h-11 w-11"
+            />
           </div>
 
           {product.sku && (
@@ -343,33 +352,12 @@ export function SsrProductDetail({ product }: { product: ProductWithRelations })
         </div>
       </div>
 
-      {/* Reviews section */}
-      {product.reviews && product.reviews.length > 0 && (
-        <section className="mt-16 pt-8 border-t">
-          <h2 className="text-2xl font-bold mb-4">Customer reviews ({product.reviews.length})</h2>
-          <div className="grid gap-4 md:grid-cols-2">
-            {product.reviews.map((r) => (
-              <div key={r.id} className="border border-border rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="flex">
-                    {[1, 2, 3, 4, 5].map((i) => (
-                      <span key={i} className={i <= r.rating ? 'text-amber-500' : 'text-muted-foreground/30'}>★</span>
-                    ))}
-                  </div>
-                  {r.verified && (
-                    <Badge variant="outline" className="text-[10px] text-emerald-700 border-emerald-300 bg-emerald-50">
-                      Verified buyer
-                    </Badge>
-                  )}
-                </div>
-                <p className="text-sm font-medium">{r.customerName}</p>
-                {r.title && <p className="text-sm font-semibold mt-1">{r.title}</p>}
-                {r.body && <p className="text-sm text-muted-foreground mt-1">{r.body}</p>}
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+      {/* Reviews section — interactive (submit + display) */}
+      <ProductReviews
+        productId={product.id}
+        storeId={product.store.id}
+        initialReviews={product.reviews?.filter((r) => r.status === 'approved')}
+      />
     </div>
   )
 }
