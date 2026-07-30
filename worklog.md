@@ -1010,3 +1010,163 @@ Stage Summary:
 - **Impact**: `src/components/admin/orders.tsx:134-211` and `src/components/admin/products.tsx:144-216` use `<table>` with `overflow-x-auto`. Many columns are `hidden sm:table-cell` / `hidden md:table-cell` / `hidden lg:table-cell`. On a 375px mobile, orders table shows Order/Status/Total/Actions (4 cols) — but "Total" can be `रू 12,500` (wide), and Actions is a "View" button. Cramped. Mobile admin users (and Nepal merchants are mobile-first) will struggle.
 - **Where**: `src/components/admin/orders.tsx:134-211`; `src/components/admin/products.tsx:144-216`; `src/components/admin/customers.tsx` (likely same pattern)
 - **Fix**: On mobile (`md:hidden`), render a card-list layout instead of the table — one card per order/product with vertical-stacked fields. Keep the table for `md+`. This is more work but the standard pattern for mobile admin (see Shopify mobile admin). Short-term: at minimum, make the Actions column icon-only on mobile and reduce font size to `text-xs`.
+
+---
+Task ID: expert-audit
+Agent: main (Super Z)
+Task: Run 6-panel expert audit, synthesize ~140 findings, implement highest-impact fixes
+
+Work Log:
+- Launched 6 parallel expert audit panels (23 expert roles total):
+  1. Tech/Platform/API/Cybersecurity (4 experts) — 23 findings
+  2. Design/CX/CRO/SEO (4 experts) — 28 findings
+  3. Ecommerce/Ops/Logistics/CEO (4 experts) — 23 findings
+  4. Marketing/Social/Content/Influencer/Affiliate (5 experts) — 26 findings
+  5. Data/QA/Automation (3 experts) — 20 findings
+  6. Legal/Finance/Accountant (3 experts) — 20 findings
+- Each panel reviewed the codebase independently and produced a prioritized
+  findings doc with file:line references and concrete fixes
+- Synthesized all findings into a master plan, then implemented ~80 of the
+  highest-impact P0/P1 fixes across 8 categories:
+
+SCHEMA MIGRATION (prisma/schema.prisma):
+- Added 15+ new fields to Store (VAT/PAN, announcementBar, codRiskThreshold,
+  freeShippingThreshold, shippingRates, marketingConfig, socialViber/Whatsapp,
+  verificationStatus, refundPolicyDays, returnPolicyText, orderCounter,
+  invoiceCounter, platformCommissionRateBps, etc.)
+- Added 15+ new fields to Product (gtin, barcode, dimensions, lowStockThreshold,
+  viewCount, specifications, artisanStory, careGuide, restrictedCategory,
+  ageRestricted, minAge, healthWarningText, requiresLicense)
+- Added 25+ new fields to Order (taxRate/taxTotal/taxInclusive, internalNotes,
+  courier/trackingNumber, codRiskScore/codVerified, disputeStatus,
+  utm/referrer/affiliateId/commissionAmount, couponId, paidAt/shippedAt/
+  deliveredAt/cancelledAt/refundedAt, heldReason, shippingWard/Municipality/
+  PostalCode, invoiceNumber/Sequence/FiscalYearBs, verificationStatus)
+- Added 10 new models: AuditLog, AnalyticsEvent, NewsletterSubscriber, Coupon,
+  ProductReview, Wishlist, AbandonedCart, SellerPayout, OrderEvent, Refund,
+  ReturnRequest
+
+SECURITY (P0):
+- next.config.ts: 6 security headers (HSTS, X-Frame-Options: DENY,
+  X-Content-Type-Options: nosniff, Referrer-Policy, Permissions-Policy, CSP)
+- src/middleware.ts: CSRF defense via Origin/Referer check on state-changing
+  methods; ?ref= affiliate cookie capture (30-day, SameSite=Lax)
+- checkout/route.ts: SERVER-SIDE price recompute (was using client-supplied
+  price — direct revenue leak); wrapped entire flow in db.$transaction;
+  atomic order number via Store.orderCounter increment (fixed race condition);
+  Nepal phone validation (^9[678]\d{8}$); age gate enforcement
+- All [id] routes (products/orders/categories/stores): multi-tenant IDOR fix
+  (storeId verification on every GET/PUT/PATCH/DELETE)
+- orders/[id]: status transition validation with allowed-moves matrix
+- footer.tsx: URL sanitization on social links (rejects javascript: protocol)
+- next.config.ts: removed ignoreBuildErrors:true, enabled reactStrictMode,
+  removed output:'standalone' (was conflicting with Vercel)
+
+FINANCE (P0):
+- VAT 13% calculation in checkout (vatRegistered stores) — Nepal VAT Act 2052
+- Sequential invoice number generation (separate from orderNumber,
+  fiscal-year scoped) — IRD compliance
+- PAN/VAT/business registration fields on Store
+- CSV export endpoint /api/export/orders for accounting reconciliation
+
+LEGAL (P0):
+- 5 new legal pages as real Next.js routes (indexable by Google):
+  /privacy, /terms, /refund-policy, /shipping-policy, /cookie-policy + /about
+- Content covers: Nepal Privacy Act 2075, Electronic Transactions Act 2008,
+  Consumer Protection Act 2075, ARMA 2008, VAT Act 2052, Narcotic Drugs
+  Control Act 2033, Tobacco Product Control Act 2068, Copyright Act 2059
+- Cookie consent banner (CookieConsent component) with version-tracked consent
+- Age-gate enforcement for restricted products at checkout
+- Seller KYC fields: verificationStatus, panDocumentUrl,
+  businessRegistrationDocumentUrl, agreedToSellerAgreementAt
+
+SEO (P0/P1):
+- src/app/sitemap.ts (dynamic sitemap.xml — lists all legal pages + homepage)
+- src/app/robots.ts (replaces static public/robots.txt, with Sitemap directive
+  and Disallow /api/ /admin)
+- Organization + WebSite JSON-LD in layout.tsx (enables Google sitelinks)
+- metadataBase + canonical URLs + per-route generateMetadata
+- Title template "%s · Himal Commerce", locale en_NP, robots meta
+
+MARKETING (P0):
+- AnalyticsEvent model + /api/events endpoint (POST records client events,
+  GET returns funnel aggregation with conversion rates)
+- Client analytics lib with UTM persistence (firstTouch + lastTouch) +
+  sendBeacon for unload resilience
+- /api/newsletter endpoint (phone-first for Nepal — SMS open rates 95%+ vs
+  email 15-20%)
+- NewsletterSignup component in footer with phone + optional email
+- ShareRow component: Facebook, WhatsApp, Viber (Nepal-critical), X, copy link,
+  native share via navigator.share()
+- Wired into product detail drawer with trust signals (ships in 24h,
+  7-day returns, secure checkout) and age-restricted product warnings
+
+OPS (P0/P1):
+- Order status enum extended: pending/processing/shipped/delivered/cancelled/
+  returned/refunded/on_hold
+- OrderEvent model for audit trail (every status change logged with actor)
+- Internal notes vs customer notes (separate fields) — fixed the bug where
+  inventory-race compensation overwrote customer-facing notes
+- Status timestamps (paidAt, shippedAt, deliveredAt, cancelledAt, refundedAt)
+  auto-set on transition
+- Status transition validation (cannot go delivered→pending, etc.)
+
+AUTOMATION (P0/P1):
+- .github/workflows/ci.yml — lint + typecheck + build on every PR/push
+- vercel.json: pinned regions to sin1 (Singapore — closest to Nepal,
+  ~50ms RTT vs default iad1 ~280ms), added 2 daily crons
+- scripts/vercel-build.js (v2): uses prisma migrate deploy when migrations
+  exist, hard-blocks seed in production unless CONFIRM_PROD_SEED env var set
+
+QA (P0/P1):
+- src/app/error.tsx + global-error.tsx — error boundaries so a single bad
+  render doesn't white-screen the SPA
+- src/lib/env.ts — env validation with zod + URL sanitization helper +
+  Nepal phone validation
+
+LOGISTICS (P1):
+- Structured address fields on Order: shippingWard, shippingMunicipality,
+  shippingPostalCode (required by Nepal couriers for last-mile delivery)
+- Phone validation: Nepal mobile regex ^9[678]\d{8}$
+- COD risk scoring: high-value COD orders (above store.codRiskThreshold,
+  default Rs 5,000) set to 'on_hold' status pending verification
+
+CRON JOBS:
+- /api/cron/abandoned-cart — daily sweep (09:00 UTC) — stub for SMS recovery
+- /api/cron/low-stock — daily sweep (10:00 UTC) — stub for merchant alerts
+
+BUILD + DEPLOY:
+- Local build verified passing (23 routes registered, no TS errors)
+- Committed as `feat: expert-panel audit implementation` (commit d6187e0)
+  + `fix: cron schedule (Hobby plan = daily only)` (commit b0651c2)
+- Pushed to github.com/bymeanime/himal-commerce (main branch)
+- Vercel auto-deployed via GitHub integration (commit b0651c2 → READY)
+- Production URL: https://himal-commerce.vercel.app
+- Verified live: /api/health returns 200 with db:ok in 3ms,
+  /robots.txt + /sitemap.xml + /privacy all serve correctly,
+  all 6 security headers present on every response,
+  Organization + WebSite JSON-LD rendering,
+  CSRF middleware blocks cross-origin POSTs,
+  newsletter + events endpoints accept same-origin requests
+
+Stage Summary:
+- Production deploy: https://himal-commerce.vercel.app (v0.4.0, READY)
+- GitHub: 3 commits pushed (d6187e0, b0651c2, plus worklog)
+- Schema migrated to Neon Postgres via prisma db push in vercel-build.js
+  (will switch to prisma migrate deploy once migrations are committed)
+- ~80 of the ~140 expert findings implemented in this iteration
+- Remaining ~60 findings are P2/P3 polish items and Phase 2 architectural
+  work (SPA→routes migration, real auth, real eSewa/Khalti gateway
+  integration, SparrowSMS OTP, blog/CMS, influencer/affiliate dashboards)
+
+Deferred to Phase 2 (deliberately, with documented rationale):
+- SPA hash routing → real Next.js routes (the biggest remaining SEO win;
+  unblocks per-product OG images, shareable URLs, true SSR)
+- Real next-auth + phone OTP via SparrowSMS
+- Real eSewa/Khalti gateway integration (needs per-store merchant credentials
+  + callback endpoint)
+- Blog/CMS (BlogPost model is in schema, but no UI yet)
+- Influencer/affiliate self-serve dashboards
+- Multi-currency display (USD/INR alongside NPR)
+- Bikram Sambat fiscal calendar conversion
+- Sentry error monitoring (env var ready, integration not wired)
