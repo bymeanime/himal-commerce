@@ -1170,3 +1170,66 @@ Deferred to Phase 2 (deliberately, with documented rationale):
 - Multi-currency display (USD/INR alongside NPR)
 - Bikram Sambat fiscal calendar conversion
 - Sentry error monitoring (env var ready, integration not wired)
+
+---
+Task ID: phase-2
+Agent: main (Super Z)
+Task: Implement Phase 2 expert-panel deferred items — SSR routes, blog CMS, multi-currency, Bikram Sambat, influencer/affiliate programs, Sentry
+
+Work Log:
+- Schema: Added BlogPost, Influencer, Affiliate models (with relations back to Store)
+- Schema: Added 3 new relations to Store model (blogPosts, influencers, affiliates)
+- Created SSR storefront routes under /s/[storeSlug]/:
+  * layout.tsx — server component fetches store by slug, generates store-level metadata
+  * page.tsx — store homepage with SSR products + JSON-LD Store schema
+  * p/[productSlug]/page.tsx — SSR product detail with Product JSON-LD, breadcrumbs, related products
+  * p/[productSlug]/opengraph-image.tsx — dynamic per-product OG image (1200x630, edge runtime)
+  * c/[categorySlug]/page.tsx — SSR category page with CollectionPage JSON-LD, subcategory links, editorial content
+  * about/page.tsx — store-specific about page with founder, address, VAT info
+  * search/page.tsx — server-side search across title/description/origin/sku (noindex)
+  * blog/page.tsx — blog index with Blog JSON-LD, cover images, reading time
+  * blog/[slug]/page.tsx — blog post detail with BlogPosting JSON-LD, markdown rendering, related posts
+- Created /api/blog, /api/blog/[id], /api/influencers, /api/influencers/[id], /api/affiliates, /api/affiliates/[id] routes
+- Created admin components:
+  * blog.tsx — blog editor with markdown support, live preview, SEO fields, status workflow
+  * marketing.tsx — influencer + affiliate management with tabs, stats, referral codes
+- Updated admin-shell.tsx to add Blog + Marketing to nav
+- Updated admin.tsx to render new sections
+- Created src/lib/auth.ts — multi-tenant access control helpers (verifyStoreAccess, verifyOwnership)
+- Created src/lib/bikram-sambat.ts — BS calendar conversion (adToBs, formatDualDate, fiscalYearBs, formatInvoiceNumber)
+- Created src/lib/currency.ts + currency-store.ts — multi-currency display (NPR/USD/INR with static reference rates)
+- Created src/components/storefront/currency-toggle.tsx — dropdown in storefront header
+- Created src/components/storefront/ssr-shell.tsx — client component that hydrates react-query cache from SSR data
+- Created src/components/storefront/ssr-product-detail.tsx — variant picker, image gallery, reviews, trust signals
+- Created src/components/storefront/ssr-category-view.tsx — category page with search/sort
+- Created src/components/storefront/ssr-search-results.tsx — search results UI
+- Updated product-card.tsx to support SSR mode (wraps in Link to /s/[slug]/p/[slug])
+- Updated product-grid.tsx to accept ssrProducts prop (pre-warmed react-query cache)
+- Updated platform.tsx — 'Visit store' button now links to real /s/[slug] URL (SEO-friendly)
+- Updated sitemap.ts to dynamically list all stores, products, categories, blog posts
+- Created src/instrumentation.ts — Next.js instrumentation hook for Sentry + observability
+- Updated scripts/seed.ts — added 3 sample blog posts + 1 influencer + 1 affiliate
+- Updated ui-store.ts — added 'blog' + 'marketing' to AdminSection type
+- Updated types.ts — added BlogPost, Influencer, Affiliate types
+
+Build verification:
+- typecheck passes (npx tsc --noEmit)
+- next build passes — 43 routes registered, 0 errors
+- All new SSR routes show as ƒ (Dynamic, server-rendered on demand)
+- Sitemap.xml now lists platform + 3 stores + 20 products + 13 categories + 3 blog posts
+- Committed as `feat: Phase 2 — SSR storefront routes, blog CMS, multi-currency, Bikram Sambat, influencer/affiliate programs` (commit 2f68af9)
+- Committed `chore: ignore tool-results + dev.db` (commit 23b7656)
+- Pushed to github.com/bymeanime/himal-commerce (main branch)
+- Vercel auto-deploy triggered via GitHub integration
+
+Stage Summary:
+- GitHub: 2 commits pushed (2f68af9, 23b7656) on main branch
+- Vercel: auto-deploying via GitHub integration (token expired; integration handles it)
+- Phase 2 status: ~80% complete
+- Remaining Phase 2 items (deferred again, with rationale):
+  * Real next-auth + phone OTP via SparrowSMS — needs verified Nepal SMS gateway account
+  * Real eSewa/Khalti gateway integration — needs per-store merchant credentials + callback endpoint
+  * Sentry SDK install — stub in place; run `npm install @sentry/nextjs` + set SENTRY_DSN env var
+  * Multi-currency live exchange rates — currently static; fetch from Nepal Rastra Bank API in production
+  * Blog search + tag filtering — basic listing works, advanced filtering is Phase 3
+  * Affiliate self-serve portal — admin dashboard done, partner-facing portal is Phase 3
