@@ -1,0 +1,762 @@
+     1→'use client'
+     2→
+     3→import { useState } from 'react'
+     4→import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+     5→import { Card } from '@/components/ui/card'
+     6→import { Button } from '@/components/ui/button'
+     7→import { Input } from '@/components/ui/input'
+     8→import { Label } from '@/components/ui/label'
+     9→import { Textarea } from '@/components/ui/textarea'
+    10→import { Badge } from '@/components/ui/badge'
+    11→import { Switch } from '@/components/ui/switch'
+    12→import { Skeleton } from '@/components/ui/skeleton'
+    13→import {
+    14→  Select,
+    15→  SelectContent,
+    16→  SelectItem,
+    17→  SelectTrigger,
+    18→  SelectValue,
+    19→} from '@/components/ui/select'
+    20→import {
+    21→  Dialog,
+    22→  DialogContent,
+    23→  DialogHeader,
+    24→  DialogTitle,
+    25→  DialogDescription,
+    26→  DialogFooter,
+    27→} from '@/components/ui/dialog'
+    28→import {
+    29→  Sheet,
+    30→  SheetContent,
+    31→  SheetHeader,
+    32→  SheetTitle,
+    33→  SheetDescription,
+    34→  SheetFooter,
+    35→} from '@/components/ui/sheet'
+    36→import { formatNPR } from '@/lib/nepal'
+    37→import type { Product, Category } from '@/lib/types'
+    38→import { useCurrentStore } from '@/lib/use-current-store'
+    39→import { Plus, Search, Pencil, Trash2, Package, MapPin, Hammer, Eye, EyeOff, X, GripVertical } from 'lucide-react'
+    40→import { toast } from 'sonner'
+    41→import {
+    42→  AlertDialog,
+    43→  AlertDialogAction,
+    44→  AlertDialogCancel,
+    45→  AlertDialogContent,
+    46→  AlertDialogDescription,
+    47→  AlertDialogFooter,
+    48→  AlertDialogHeader,
+    49→  AlertDialogTitle,
+    50→} from '@/components/ui/alert-dialog'
+    51→
+    52→export function AdminProducts() {
+    53→  const qc = useQueryClient()
+    54→  const { storeId } = useCurrentStore()
+    55→  const [search, setSearch] = useState('')
+    56→  const [statusFilter, setStatusFilter] = useState<string>('all')
+    57→  const [editing, setEditing] = useState<Product | null>(null)
+    58→  const [creating, setCreating] = useState(false)
+    59→  const [deleting, setDeleting] = useState<Product | null>(null)
+    60→
+    61→  const { data, isLoading } = useQuery<{ products: Product[] }>({
+    62→    queryKey: ['products', 'admin', storeId, statusFilter, search],
+    63→    queryFn: async () => {
+    64→      const params = new URLSearchParams({ storeId: storeId! })
+    65→      if (statusFilter !== 'all') params.set('status', statusFilter)
+    66→      if (search) params.set('q', search)
+    67→      const res = await fetch(`/api/products?${params}`)
+    68→      return res.json()
+    69→    },
+    70→    enabled: !!storeId,
+    71→  })
+    72→  const { data: catData } = useQuery<{ categories: Category[] }>({
+    73→    queryKey: ['categories', storeId],
+    74→    queryFn: async () => (await fetch(`/api/categories?storeId=${storeId}`)).json(),
+    75→    enabled: !!storeId,
+    76→  })
+    77→
+    78→  const deleteMut = useMutation({
+    79→    mutationFn: async (id: string) => {
+    80→      await fetch(`/api/products/${id}`, { method: 'DELETE' })
+    81→    },
+    82→    onSuccess: () => {
+    83→      qc.invalidateQueries({ queryKey: ['products'] })
+    84→      qc.invalidateQueries({ queryKey: ['stats'] })
+    85→      toast.success('Product deleted')
+    86→      setDeleting(null)
+    87→    },
+    88→    onError: () => toast.error('Failed to delete product'),
+    89→  })
+    90→
+    91→  const products = data?.products ?? []
+    92→  const categories = catData?.categories ?? []
+    93→
+    94→  if (!storeId) {
+    95→    return <div className="p-6 text-muted-foreground">No store selected.</div>
+    96→  }
+    97→
+    98→  return (
+    99→    <div className="p-4 md:p-6 space-y-5 max-w-7xl">
+   100→      <div className="flex flex-wrap items-center justify-between gap-3">
+   101→        <div>
+   102→          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Products</h1>
+   103→          <p className="text-sm text-muted-foreground mt-1">
+   104→            {products.length} products in your catalog.
+   105→          </p>
+   106→        </div>
+   107→        <Button onClick={() => setCreating(true)}>
+   108→          <Plus className="h-4 w-4 mr-1" /> New product
+   109→        </Button>
+   110→      </div>
+   111→
+   112→      {/* Filters */}
+   113→      <div className="flex flex-col sm:flex-row gap-3">
+   114→        <div className="relative flex-1">
+   115→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   116→          <Input
+   117→            placeholder="Search by title, subtitle, description…"
+   118→            value={search}
+   119→            onChange={(e) => setSearch(e.target.value)}
+   120→            className="pl-9"
+   121→          />
+   122→        </div>
+   123→        <Select value={statusFilter} onValueChange={setStatusFilter}>
+   124→          <SelectTrigger className="w-40">
+   125→            <SelectValue />
+   126→          </SelectTrigger>
+   127→          <SelectContent>
+   128→            <SelectItem value="all">All statuses</SelectItem>
+   129→            <SelectItem value="published">Published</SelectItem>
+   130→            <SelectItem value="draft">Draft</SelectItem>
+   131→          </SelectContent>
+   132→        </Select>
+   133→      </div>
+   134→
+   135→      {/* Table */}
+   136→      <Card className="border-border/60 overflow-hidden">
+   137→        {isLoading ? (
+   138→          <div className="p-4 space-y-2">
+   139→            {Array.from({ length: 5 }).map((_, i) => (
+   140→              <Skeleton key={i} className="h-12 w-full" />
+   141→            ))}
+   142→          </div>
+   143→        ) : (
+   144→          <div className="overflow-x-auto">
+   145→            <table className="w-full text-sm">
+   146→              <thead className="bg-muted/50 text-xs uppercase tracking-wider text-muted-foreground">
+   147→                <tr>
+   148→                  <th className="text-left font-medium px-4 py-3">Product</th>
+   149→                  <th className="text-left font-medium px-4 py-3 hidden md:table-cell">Category</th>
+   150→                  <th className="text-right font-medium px-4 py-3">Price</th>
+   151→                  <th className="text-right font-medium px-4 py-3 hidden sm:table-cell">Inventory</th>
+   152→                  <th className="text-left font-medium px-4 py-3">Status</th>
+   153→                  <th className="text-right font-medium px-4 py-3">Actions</th>
+   154→                </tr>
+   155→              </thead>
+   156→              <tbody>
+   157→                {products.length === 0 ? (
+   158→                  <tr>
+   159→                    <td colSpan={6} className="text-center py-12 text-muted-foreground">
+   160→                      <Package className="h-8 w-8 mx-auto mb-2 opacity-40" />
+   161→                      No products yet. Click &quot;New product&quot; to add your first.
+   162→                    </td>
+   163→                  </tr>
+   164→                ) : (
+   165→                  products.map((p) => (
+   166→                    <tr key={p.id} className="border-t border-border/40 hover:bg-muted/30">
+   167→                      <td className="px-4 py-3">
+   168→                        <div className="flex items-center gap-3">
+   169→                          <div className="h-10 w-10 rounded-md overflow-hidden bg-muted shrink-0">
+   170→                            {p.thumbnail && <img src={p.thumbnail} alt="" className="h-full w-full object-cover" />}
+   171→                          </div>
+   172→                          <div className="min-w-0">
+   173→                            <p className="font-medium line-clamp-1">{p.title}</p>
+   174→                            <p className="text-xs text-muted-foreground flex items-center gap-2">
+   175→                              {p.origin && <span className="flex items-center gap-0.5"><MapPin className="h-3 w-3" />{p.origin}</span>}
+   176→                              {p.isHandmade && <span className="flex items-center gap-0.5"><Hammer className="h-3 w-3" />Handmade</span>}
+   177→                            </p>
+   178→                          </div>
+   179→                        </div>
+   180→                      </td>
+   181→                      <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">
+   182→                        {p.category?.name || '—'}
+   183→                      </td>
+   184→                      <td className="px-4 py-3 text-right font-semibold">{formatNPR(p.price)}</td>
+   185→                      <td className="px-4 py-3 text-right hidden sm:table-cell">
+   186→                        <span className={p.inventory <= 5 ? 'text-red-600 font-semibold' : ''}>
+   187→                          {p.inventory}
+   188→                        </span>
+   189→                      </td>
+   190→                      <td className="px-4 py-3">
+   191→                        <Badge variant={p.status === 'published' ? 'default' : 'secondary'}>
+   192→                          {p.status === 'published' ? <Eye className="h-3 w-3 mr-0.5" /> : <EyeOff className="h-3 w-3 mr-0.5" />}
+   193→                          {p.status}
+   194→                        </Badge>
+   195→                      </td>
+   196→                      <td className="px-4 py-3 text-right">
+   197→                        <div className="flex items-center justify-end gap-1">
+   198→                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditing(p)}>
+   199→                            <Pencil className="h-3.5 w-3.5" />
+   200→                          </Button>
+   201→                          <Button
+   202→                            variant="ghost"
+   203→                            size="icon"
+   204→                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+   205→                            onClick={() => setDeleting(p)}
+   206→                          >
+   207→                            <Trash2 className="h-3.5 w-3.5" />
+   208→                          </Button>
+   209→                        </div>
+   210→                      </td>
+   211→                    </tr>
+   212→                  ))
+   213→                )}
+   214→              </tbody>
+   215→            </table>
+   216→          </div>
+   217→        )}
+   218→      </Card>
+   219→
+   220→      {/* Create dialog */}
+   221→      {creating && (
+   222→        <ProductFormDialog
+   223→          open={creating}
+   224→          onOpenChange={setCreating}
+   225→          categories={categories}
+   226→          storeId={storeId}
+   227→        />
+   228→      )}
+   229→
+   230→      {/* Edit sheet */}
+   231→      {editing && (
+   232→        <ProductFormSheet
+   233→          product={editing}
+   234→          open={!!editing}
+   235→          onOpenChange={(o) => !o && setEditing(null)}
+   236→          categories={categories}
+   237→        />
+   238→      )}
+   239→
+   240→      {/* Delete confirm */}
+   241→      <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
+   242→        <AlertDialogContent>
+   243→          <AlertDialogHeader>
+   244→            <AlertDialogTitle>Delete product?</AlertDialogTitle>
+   245→            <AlertDialogDescription>
+   246→              This will permanently delete <strong>{deleting?.title}</strong>. This action cannot be undone.
+   247→            </AlertDialogDescription>
+   248→          </AlertDialogHeader>
+   249→          <AlertDialogFooter>
+   250→            <AlertDialogCancel>Cancel</AlertDialogCancel>
+   251→            <AlertDialogAction
+   252→              onClick={() => deleting && deleteMut.mutate(deleting.id)}
+   253→              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+   254→            >
+   255→              Delete
+   256→            </AlertDialogAction>
+   257→          </AlertDialogFooter>
+   258→        </AlertDialogContent>
+   259→      </AlertDialog>
+   260→    </div>
+   261→  )
+   262→}
+   263→
+   264→// ---------- Create dialog ----------
+   265→function ProductFormDialog({
+   266→  open,
+   267→  onOpenChange,
+   268→  categories,
+   269→  storeId,
+   270→}: {
+   271→  open: boolean
+   272→  onOpenChange: (b: boolean) => void
+   273→  categories: Category[]
+   274→  storeId: string
+   275→}) {
+   276→  const qc = useQueryClient()
+   277→  const [form, setForm] = useState({
+   278→    title: '',
+   279→    subtitle: '',
+   280→    description: '',
+   281→    thumbnail: '',
+   282→    price: '',
+   283→    compareAt: '',
+   284→    sku: '',
+   285→    inventory: '0',
+   286→    weightGrams: '',
+   287→    origin: '',
+   288→    isHandmade: false,
+   289→    status: 'published',
+   290→    categoryId: '',
+   291→    variants: [] as VariantForm[],
+   292→  })
+   293→
+   294→  const createMut = useMutation({
+   295→    mutationFn: async () => {
+   296→      const res = await fetch('/api/products', {
+   297→        method: 'POST',
+   298→        headers: { 'Content-Type': 'application/json' },
+   299→        body: JSON.stringify({
+   300→          storeId,
+   301→          ...form,
+   302→          price: Number(form.price),
+   303→          compareAt: form.compareAt ? Number(form.compareAt) : null,
+   304→          inventory: Number(form.inventory),
+   305→          weightGrams: form.weightGrams ? Number(form.weightGrams) : null,
+   306→          categoryId: form.categoryId || null,
+   307→          variants: form.variants.filter(v => v.title.trim()).map(v => ({
+   308→            title: v.title,
+   309→            sku: v.sku || null,
+   310→            price: v.price ? Number(v.price) : null,
+   311→            inventory: Number(v.inventory) || 0,
+   312→            attributes: v.attributes,
+   313→          })),
+   314→        }),
+   315→      })
+   316→      if (!res.ok) throw new Error('Failed')
+   317→      return res.json()
+   318→    },
+   319→    onSuccess: () => {
+   320→      qc.invalidateQueries({ queryKey: ['products'] })
+   321→      qc.invalidateQueries({ queryKey: ['stats'] })
+   322→      toast.success('Product created')
+   323→      onOpenChange(false)
+   324→    },
+   325→    onError: () => toast.error('Failed to create product'),
+   326→  })
+   327→
+   328→  return (
+   329→    <Dialog open={open} onOpenChange={onOpenChange}>
+   330→      <DialogContent className="max-w-lg max-h-[92vh] overflow-y-auto nice-scroll">
+   331→        <DialogHeader>
+   332→          <DialogTitle>New product</DialogTitle>
+   333→          <DialogDescription>Add a new product to your catalog.</DialogDescription>
+   334→        </DialogHeader>
+   335→
+   336→        <ProductForm form={form} setForm={setForm} categories={categories} />
+   337→
+   338→        <DialogFooter>
+   339→          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+   340→          <Button
+   341→            onClick={() => createMut.mutate()}
+   342→            disabled={!form.title || !form.description || !form.price || createMut.isPending}
+   343→          >
+   344→            {createMut.isPending ? 'Creating…' : 'Create product'}
+   345→          </Button>
+   346→        </DialogFooter>
+   347→      </DialogContent>
+   348→    </Dialog>
+   349→  )
+   350→}
+   351→
+   352→// ---------- Edit sheet ----------
+   353→function ProductFormSheet({
+   354→  product,
+   355→  open,
+   356→  onOpenChange,
+   357→  categories,
+   358→}: {
+   359→  product: Product
+   360→  open: boolean
+   361→  onOpenChange: (b: boolean) => void
+   362→  categories: Category[]
+   363→}) {
+   364→  const qc = useQueryClient()
+   365→  const [form, setForm] = useState({
+   366→    title: product.title,
+   367→    subtitle: product.subtitle || '',
+   368→    description: product.description,
+   369→    thumbnail: product.thumbnail || '',
+   370→    price: String(product.price / 100),
+   371→    compareAt: product.compareAt ? String(product.compareAt / 100) : '',
+   372→    sku: product.sku || '',
+   373→    inventory: String(product.inventory),
+   374→    weightGrams: product.weightGrams ? String(product.weightGrams) : '',
+   375→    origin: product.origin || '',
+   376→    isHandmade: product.isHandmade,
+   377→    status: product.status,
+   378→    categoryId: product.categoryId || '',
+   379→    variants: (product.variants ?? []).map(v => ({
+   380→      id: v.id,
+   381→      title: v.title,
+   382→      sku: v.sku || '',
+   383→      price: v.price ? String(v.price / 100) : '',
+   384→      inventory: String(v.inventory),
+   385→      attributes: v.attributes || {},
+   386→    })) as VariantForm[],
+   387→  })
+   388→
+   389→  // Fetch fresh product with variants when sheet opens (in case list view didn't include them)
+   390→  useQuery({
+   391→    queryKey: ['product', product.id, open],
+   392→    queryFn: async () => {
+   393→      const res = await fetch(`/api/products/${product.id}`)
+   394→      if (!res.ok) return null
+   395→      const data = await res.json()
+   396→      return data.product as Product & { variants: VariantForm[] }
+   397→    },
+   398→    enabled: open,
+   399→    staleTime: 0,
+   400→    refetchOnMount: true,
+   401→  })
+   402→
+   403→  const updateMut = useMutation({
+   404→    mutationFn: async () => {
+   405→      const res = await fetch(`/api/products/${product.id}`, {
+   406→        method: 'PUT',
+   407→        headers: { 'Content-Type': 'application/json' },
+   408→        body: JSON.stringify({
+   409→          ...form,
+   410→          price: Number(form.price),
+   411→          compareAt: form.compareAt ? Number(form.compareAt) : null,
+   412→          inventory: Number(form.inventory),
+   413→          weightGrams: form.weightGrams ? Number(form.weightGrams) : null,
+   414→          categoryId: form.categoryId || null,
+   415→          variants: form.variants.map(v => ({
+   416→            ...(v.id ? { id: v.id } : {}),
+   417→            title: v.title,
+   418→            sku: v.sku || null,
+   419→            price: v.price ? Number(v.price) : null,
+   420→            inventory: Number(v.inventory) || 0,
+   421→            attributes: v.attributes,
+   422→            ...(v._destroy ? { _destroy: true } : {}),
+   423→          })),
+   424→        }),
+   425→      })
+   426→      if (!res.ok) throw new Error('Failed')
+   427→      return res.json()
+   428→    },
+   429→    onSuccess: () => {
+   430→      qc.invalidateQueries({ queryKey: ['products'] })
+   431→      qc.invalidateQueries({ queryKey: ['stats'] })
+   432→      toast.success('Product updated')
+   433→      onOpenChange(false)
+   434→    },
+   435→    onError: () => toast.error('Failed to update product'),
+   436→  })
+   437→
+   438→  return (
+   439→    <Sheet open={open} onOpenChange={onOpenChange}>
+   440→      <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto nice-scroll">
+   441→        <SheetHeader>
+   442→          <SheetTitle>Edit product</SheetTitle>
+   443→          <SheetDescription>{product.title}</SheetDescription>
+   444→        </SheetHeader>
+   445→
+   446→        <div className="px-1 py-4">
+   447→          <ProductForm form={form} setForm={setForm} categories={categories} />
+   448→        </div>
+   449→
+   450→        <SheetFooter>
+   451→          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+   452→          <Button
+   453→            onClick={() => updateMut.mutate()}
+   454→            disabled={!form.title || !form.description || !form.price || updateMut.isPending}
+   455→          >
+   456→            {updateMut.isPending ? 'Saving…' : 'Save changes'}
+   457→          </Button>
+   458→        </SheetFooter>
+   459→      </SheetContent>
+   460→    </Sheet>
+   461→  )
+   462→}
+   463→
+   464→// ---------- Shared form fields ----------
+   465→type VariantForm = {
+   466→  id?: string
+   467→  title: string
+   468→  sku: string
+   469→  price: string // NPR — empty string means "use product price"
+   470→  inventory: string
+   471→  attributes: Record<string, string>
+   472→  _destroy?: boolean
+   473→}
+   474→
+   475→function ProductForm({
+   476→  form,
+   477→  setForm,
+   478→  categories,
+   479→}: {
+   480→  form: Record<string, unknown>
+   481→  setForm: React.Dispatch<React.SetStateAction<Record<string, unknown>>>
+   482→  categories: Category[]
+   483→}) {
+   484→  const set = (k: string, v: string | boolean) => setForm((f) => ({ ...f, [k]: v }))
+   485→  const variants = (form.variants as VariantForm[]) ?? []
+   486→  const setVariants = (v: VariantForm[]) => setForm((f) => ({ ...f, variants: v }))
+   487→
+   488→  return (
+   489→    <div className="space-y-3">
+   490→      <div className="space-y-1.5">
+   491→        <Label>Title *</Label>
+   492→        <Input value={form.title as string} onChange={(e) => set('title', e.target.value)} placeholder="e.g. Handwoven Dhaka Topi" />
+   493→      </div>
+   494→      <div className="space-y-1.5">
+   495→        <Label>Subtitle</Label>
+   496→        <Input value={form.subtitle as string} onChange={(e) => set('subtitle', e.target.value)} placeholder="e.g. Traditional Nepali cap" />
+   497→      </div>
+   498→      <div className="space-y-1.5">
+   499→        <Label>Description *</Label>
+   500→        <Textarea
+   501→          rows={4}
+   502→          value={form.description as string}
+   503→          onChange={(e) => set('description', e.target.value)}
+   504→          placeholder="Detailed product description…"
+   505→        />
+   506→      </div>
+   507→      <div className="space-y-1.5">
+   508→        <Label>Image URL</Label>
+   509→        <Input value={form.thumbnail as string} onChange={(e) => set('thumbnail', e.target.value)} placeholder="https://…" />
+   510→        {form.thumbnail && (
+   511→          <div className="h-24 w-full rounded-md overflow-hidden bg-muted">
+   512→            <img src={form.thumbnail as string} alt="" className="h-full w-full object-cover" />
+   513→          </div>
+   514→        )}
+   515→      </div>
+   516→      <div className="grid grid-cols-2 gap-3">
+   517→        <div className="space-y-1.5">
+   518→          <Label>Price (NPR) *</Label>
+   519→          <Input type="number" value={form.price as string} onChange={(e) => set('price', e.target.value)} placeholder="850" />
+   520→          <p className="text-[11px] text-muted-foreground">Base price. Variants can override.</p>
+   521→        </div>
+   522→        <div className="space-y-1.5">
+   523→          <Label>Compare-at price (NPR)</Label>
+   524→          <Input type="number" value={form.compareAt as string} onChange={(e) => set('compareAt', e.target.value)} placeholder="1200" />
+   525→        </div>
+   526→      </div>
+   527→      <div className="grid grid-cols-2 gap-3">
+   528→        <div className="space-y-1.5">
+   529→          <Label>SKU</Label>
+   530→          <Input value={form.sku as string} onChange={(e) => set('sku', e.target.value)} placeholder="DHAKA-TOP-001" />
+   531→        </div>
+   532→        <div className="space-y-1.5">
+   533→          <Label>Inventory</Label>
+   534→          <Input type="number" value={form.inventory as string} onChange={(e) => set('inventory', e.target.value)} />
+   535→          <p className="text-[11px] text-muted-foreground">Used when no variants, or as fallback.</p>
+   536→        </div>
+   537→      </div>
+   538→      <div className="grid grid-cols-2 gap-3">
+   539→        <div className="space-y-1.5">
+   540→          <Label>Origin (district)</Label>
+   541→          <Input value={form.origin as string} onChange={(e) => set('origin', e.target.value)} placeholder="Palpa" />
+   542→        </div>
+   543→        <div className="space-y-1.5">
+   544→          <Label>Weight (grams)</Label>
+   545→          <Input type="number" value={(form.weightGrams as string) ?? ''} onChange={(e) => set('weightGrams', e.target.value)} placeholder="250" />
+   546→        </div>
+   547→      </div>
+   548→      <div className="space-y-1.5">
+   549→        <Label>Category</Label>
+   550→        <Select value={form.categoryId as string} onValueChange={(v) => set('categoryId', v)}>
+   551→          <SelectTrigger>
+   552→            <SelectValue placeholder="Select category" />
+   553→          </SelectTrigger>
+   554→          <SelectContent>
+   555→            {categories.map((c) => (
+   556→              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+   557→            ))}
+   558→          </SelectContent>
+   559→        </Select>
+   560→      </div>
+   561→      <div className="space-y-1.5">
+   562→        <Label>Status</Label>
+   563→        <Select value={form.status as string} onValueChange={(v) => set('status', v)}>
+   564→          <SelectTrigger>
+   565→            <SelectValue />
+   566→          </SelectTrigger>
+   567→          <SelectContent>
+   568→            <SelectItem value="published">Published</SelectItem>
+   569→            <SelectItem value="draft">Draft</SelectItem>
+   570→          </SelectContent>
+   571→        </Select>
+   572→      </div>
+   573→      <div className="flex items-center justify-between rounded-lg border p-3">
+   574→        <div>
+   575→          <Label className="cursor-pointer">Handmade</Label>
+   576→          <p className="text-xs text-muted-foreground">Show &quot;Handmade&quot; badge on storefront</p>
+   577→        </div>
+   578→        <Switch checked={form.isHandmade as boolean} onCheckedChange={(v) => set('isHandmade', v)} />
+   579→      </div>
+   580→
+   581→      <VariantsEditor variants={variants} onChange={setVariants} />
+   582→    </div>
+   583→  )
+   584→}
+   585→
+   586→// ---------- Variants editor ----------
+   587→function VariantsEditor({
+   588→  variants,
+   589→  onChange,
+   590→}: {
+   591→  variants: VariantForm[]
+   592→  onChange: (v: VariantForm[]) => void
+   593→}) {
+   594→  const visibleVariants = variants.filter((v) => !v._destroy)
+   595→
+   596→  const addVariant = () => {
+   597→    onChange([
+   598→      ...variants,
+   599→      { title: '', sku: '', price: '', inventory: '0', attributes: {} },
+   600→    ])
+   601→  }
+   602→
+   603→  const updateVariant = (idx: number, patch: Partial<VariantForm>) => {
+   604→    onChange(variants.map((v, i) => (i === idx ? { ...v, ...patch } : v)))
+   605→  }
+   606→
+   607→  const removeVariant = (idx: number) => {
+   608→    const v = variants[idx]
+   609→    if (v.id) {
+   610→      onChange(variants.map((vv, i) => (i === idx ? { ...vv, _destroy: true } : vv)))
+   611→    } else {
+   612→      onChange(variants.filter((_, i) => i !== idx))
+   613→    }
+   614→  }
+   615→
+   616→  return (
+   617→    <div className="space-y-2 rounded-lg border p-3 bg-secondary/20">
+   618→      <div className="flex items-center justify-between">
+   619→        <div>
+   620→          <Label className="text-sm font-semibold">Variants</Label>
+   621→          <p className="text-[11px] text-muted-foreground">
+   622→            Optional — for size, color, or weight options. If empty, the product is sold as-is.
+   623→          </p>
+   624→        </div>
+   625→        <Button type="button" size="sm" variant="outline" onClick={addVariant}>
+   626→          <Plus className="h-3.5 w-3.5 mr-1" />
+   627→          Add variant
+   628→        </Button>
+   629→      </div>
+   630→      {visibleVariants.length === 0 ? (
+   631→        <p className="text-xs text-muted-foreground/70 italic py-2">
+   632→          No variants. Product uses the base price and inventory shown above.
+   633→        </p>
+   634→      ) : (
+   635→        <div className="space-y-2">
+   636→          {visibleVariants.map((v, idx) => (
+   637→            <div key={idx} className="rounded-md border bg-background p-2.5 space-y-2">
+   638→              <div className="flex items-start gap-2">
+   639→                <GripVertical className="h-4 w-4 text-muted-foreground/40 mt-2 shrink-0" />
+   640→                <div className="flex-1 grid grid-cols-2 gap-2">
+   641→                  <Input
+   642→                    placeholder="Variant label (e.g. Red / Large, 250g, Size 8)"
+   643→                    value={v.title}
+   644→                    onChange={(e) => updateVariant(idx, { title: e.target.value })}
+   645→                    className="text-sm"
+   646→                  />
+   647→                  <Input
+   648→                    placeholder="SKU (optional)"
+   649→                    value={v.sku}
+   650→                    onChange={(e) => updateVariant(idx, { sku: e.target.value })}
+   651→                    className="text-sm font-mono"
+   652→                  />
+   653→                </div>
+   654→                <Button
+   655→                  type="button"
+   656→                  size="icon"
+   657→                  variant="ghost"
+   658→                  className="h-7 w-7 text-destructive hover:text-destructive shrink-0"
+   659→                  onClick={() => removeVariant(idx)}
+   660→                >
+   661→                  <X className="h-3.5 w-3.5" />
+   662→                </Button>
+   663→              </div>
+   664→              <div className="grid grid-cols-2 gap-2 pl-6">
+   665→                <div className="flex items-center gap-1.5">
+   666→                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground w-12 shrink-0">NPR</span>
+   667→                  <Input
+   668→                    type="number"
+   669→                    placeholder="use base"
+   670→                    value={v.price}
+   671→                    onChange={(e) => updateVariant(idx, { price: e.target.value })}
+   672→                    className="text-sm h-8"
+   673→                  />
+   674→                </div>
+   675→                <div className="flex items-center gap-1.5">
+   676→                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground w-12 shrink-0">Stock</span>
+   677→                  <Input
+   678→                    type="number"
+   679→                    placeholder="0"
+   680→                    value={v.inventory}
+   681→                    onChange={(e) => updateVariant(idx, { inventory: e.target.value })}
+   682→                    className="text-sm h-8"
+   683→                  />
+   684→                </div>
+   685→              </div>
+   686→              <VariantAttributesEditor
+   687→                attrs={v.attributes}
+   688→                onChange={(attrs) => updateVariant(idx, { attributes: attrs })}
+   689→              />
+   690→            </div>
+   691→          ))}
+   692→        </div>
+   693→      )}
+   694→    </div>
+   695→  )
+   696→}
+   697→
+   698→function VariantAttributesEditor({
+   699→  attrs,
+   700→  onChange,
+   701→}: {
+   702→  attrs: Record<string, string>
+   703→  onChange: (a: Record<string, string>) => void
+   704→}) {
+   705→  const entries = Object.entries(attrs)
+   706→  const [newKey, setNewKey] = useState('')
+   707→  const [newValue, setNewValue] = useState('')
+   708→
+   709→  const add = () => {
+   710→    if (!newKey.trim()) return
+   711→    onChange({ ...attrs, [newKey.trim()]: newValue.trim() })
+   712→    setNewKey('')
+   713→    setNewValue('')
+   714→  }
+   715→  const remove = (k: string) => {
+   716→    const next = { ...attrs }
+   717→    delete next[k]
+   718→    onChange(next)
+   719→  }
+   720→
+   721→  return (
+   722→    <div className="pl-6 space-y-1.5">
+   723→      {entries.length > 0 && (
+   724→        <div className="flex flex-wrap gap-1">
+   725→          {entries.map(([k, val]) => (
+   726→            <span
+   727→              key={k}
+   728→              className="inline-flex items-center gap-1 text-[11px] bg-primary/10 text-primary px-1.5 py-0.5 rounded"
+   729→            >
+   730→              <span className="font-medium">{k}:</span> {val}
+   731→              <button
+   732→                type="button"
+   733→                onClick={() => remove(k)}
+   734→                className="hover:bg-primary/20 rounded p-0.5"
+   735→              >
+   736→                <X className="h-2.5 w-2.5" />
+   737→              </button>
+   738→            </span>
+   739→          ))}
+   740→        </div>
+   741→      )}
+   742→      <div className="flex gap-1.5">
+   743→        <Input
+   744→          placeholder="attribute (e.g. color, size, weight)"
+   745→          value={newKey}
+   746→          onChange={(e) => setNewKey(e.target.value)}
+   747→          className="text-xs h-7"
+   748→        />
+   749→        <Input
+   750→          placeholder="value (e.g. Red, L, 250g)"
+   751→          value={newValue}
+   752→          onChange={(e) => setNewValue(e.target.value)}
+   753→          className="text-xs h-7"
+   754→        />
+   755→        <Button type="button" size="sm" variant="ghost" className="h-7" onClick={add} disabled={!newKey.trim()}>
+   756→          <Plus className="h-3 w-3" />
+   757→        </Button>
+   758→      </div>
+   759→    </div>
+   760→  )
+   761→}
+   762→

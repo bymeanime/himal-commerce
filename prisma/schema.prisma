@@ -1,5 +1,11 @@
 // Himal Commerce — multi-tenant commerce platform (Medusa-style)
 // One platform, many stores. Each store has isolated products/orders/customers.
+//
+// Schema v2 — incorporates expert-panel audit findings (security, finance,
+// legal, ops, marketing, data, logistics). Adds: VAT/tax fields, PAN/VAT
+// registration, audit log, analytics events, coupons, reviews, returns,
+// couriers, plans/subscriptions, abandoned cart, order timestamps,
+// invoice sequence, internal notes, structured address, age gate, and more.
 
 generator client {
   provider = "prisma-client-js"
@@ -37,9 +43,48 @@ model Store {
   socialInstagram String?
   socialTiktok    String?
   socialYoutube   String?
-  // Status
+  socialViber     String?
+  socialWhatsapp  String?
+
+  // ====== Finance / Legal (Accountant + Legal panel) ======
+  panNumber             String?  // Permanent Account Number (IRD Nepal)
+  vatNumber             String?  // Separate from PAN — VAT-registered businesses
+  vatRegistered         Boolean  @default(false)
+  businessRegistrationNumber String?
+  panDocumentUrl        String?
+  businessRegistrationDocumentUrl String?
+  // Tax configuration
+  defaultTaxRate        Int      @default(1300) // basis points, 1300 = 13% Nepal VAT
+  taxInclusiveDisplay   Boolean  @default(true) // prices shown include VAT
+  vatInvoicePrefix      String   @default("INV")
+  // Seller KYC / marketplace facilitator
+  verificationStatus    String   @default("pending") // pending | under_review | verified | rejected | suspended
+  agreedToSellerAgreementAt    DateTime?
+  agreedToSellerAgreementVersion String?
+  agreedToPrivacyPolicyAt      DateTime?
+  // Return / refund / shipping policies (per-store override)
+  refundPolicyDays      Int      @default(7)
+  returnPolicyText      String?
+  shippingPolicyText    String?
+
+  // ====== Logistics (Logistics + CEO panels) ======
+  codRiskThreshold      Int      @default(500000) // paisa — orders above this need COD verification
+  freeShippingThreshold Int?     // paisa — orders above this ship free
+  // Merchant-configurable shipping rates (JSON map of zone → { minWeight, maxWeight, rate })
+  shippingRates         String?  // JSON string (sqlite doesn't support Json natively)
+
+  // ====== Marketing (Marketing panel) ======
+  announcementBar       String?  // JSON string { message, textColor, bgColor, link }
+  // Marketing/analytics IDs (per-store GA4, Meta Pixel, TikTok Pixel)
+  marketingConfig       String?  // JSON string { ga4Id, metaPixelId, tiktokPixelId }
+
+  // ====== Platform / Monetization (CEO panel) ======
   status       String   @default("active") // active | suspended | draft
   plan         String   @default("free") // free | pro | enterprise
+  platformCommissionRateBps Int @default(0) // basis points, 500 = 5%
+  // Order number sequence (atomic — fixes race condition)
+  orderCounter Int      @default(1000)
+  invoiceCounter Int    @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -48,6 +93,14 @@ model Store {
   orders       Order[]
   customers    Customer[]
   members      StoreMember[]
+  auditLogs    AuditLog[]
+  analyticsEvents AnalyticsEvent[]
+  newsletterSubscribers NewsletterSubscriber[]
+  coupons      Coupon[]
+  reviews      ProductReview[]
+  wishlists    Wishlist[]
+  abandonedCarts AbandonedCart[]
+  payouts      SellerPayout[]
 }
 
 // ====== Users (simplified — no password auth for demo) ======
@@ -85,12 +138,33 @@ model Product {
   price       Int
   compareAt   Int?
   sku         String?
+  // Barcodes (Ecommerce panel) — for retail expansion + courier label printing
+  gtin        String?  // Global Trade Item Number (UPC/EAN)
+  barcode     String?  // Scan-to-find at packing
   status      String   @default("published") // draft | published
   inventory   Int      @default(0)
   weightGrams Int?
+  // Parcel dimensions for volumetric weight (Logistics panel)
+  lengthMm    Int?
+  widthMm     Int?
+  heightMm    Int?
   // Nepal-specific
   origin      String?
   isHandmade  Boolean  @default(false)
+  // Rich content (Content panel) — beyond plain description
+  specifications String? // JSON string { material, weight, dimensions, care }
+  artisanStory String?
+  careGuide   String?
+  // Ops (Ecommerce panel)
+  lowStockThreshold Int @default(5)
+  viewCount   Int      @default(0)
+  // Legal — restricted products / age gate (Legal panel)
+  restrictedCategory  String?  @default("none") // none | alcohol | tobacco | cannabis | pharmaceutical | wildlife | adult | other
+  ageRestricted       Boolean  @default(false)
+  minAge              Int      @default(0)
+  healthWarningText   String?
+  requiresLicense     String?  // e.g. "DDA License #xxx" for pharmaceuticals
+
   categoryId  String?
   category    Category? @relation(fields: [categoryId], references: [id])
   createdAt   DateTime @default(now())
@@ -98,13 +172,15 @@ model Product {
   orderItems  OrderItem[]
   variants    ProductVariant[]
   images      ProductImage[]
+  reviews     ProductReview[]
+  wishlists   Wishlist[]
 
   @@index([storeId])
+  @@index([storeId, barcode])
   @@unique([storeId, slug])
 }
 
 // Product variants — for size/color/weight options
-// Each variant has its own SKU, price override (optional), and inventory
 model ProductVariant {
   id        String  @id @default(cuid())
   productId String
@@ -141,6 +217,7 @@ model Category {
   icon        String?
   description String?
   imageUrl    String?
+  editorialMd String?  // Long-form SEO content for category page (Content panel)
   parentId    String?  // self-relation for hierarchy
   parent      Category? @relation("CategoryHierarchy", fields: [parentId], references: [id])
   children    Category[] @relation("CategoryHierarchy")
@@ -157,7 +234,13 @@ model Order {
   storeId     String
   store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
   orderNumber String
-  status      String   @default("pending") // pending | processing | shipped | delivered | cancelled
+  // Separate invoice number — sequential, fiscal-year scoped, immutable (Accountant panel)
+  invoiceNumber       String?
+  invoiceSequence     Int     @default(0)
+  invoiceFiscalYearBs String? // e.g. "2081-82"
+
+  // Extended status enum (Ops panel) — pending | processing | shipped | delivered | cancelled | returned | refunded | on_hold
+  status      String   @default("pending")
   fulfillment String   @default("unfulfilled") // unfulfilled | fulfilled | returned
   customerId  String?
   customer    Customer? @relation(fields: [customerId], references: [id])
@@ -167,29 +250,78 @@ model Order {
   customerPhone    String
   customerEmail    String?
 
-  // Shipping — Nepal only
-  shippingAddress  String
-  shippingCity     String
-  shippingDistrict String
-  shippingZone     String // Province
+  // Shipping — Nepal only. Structured address fields (Logistics panel)
+  shippingAddress     String
+  shippingCity        String
+  shippingDistrict    String
+  shippingZone        String // Province
+  shippingWard        String?
+  shippingMunicipality String?
+  shippingPostalCode  String?
 
   // Payment — Nepal methods
   paymentMethod String // cod | esewa | khalti
-  paymentStatus String @default("unpaid") // unpaid | pending | paid | refunded
+  paymentStatus String @default("unpaid") // unpaid | pending | paid | refunded | partially_refunded
 
-  // Money in paisa
+  // Money in paisa — including VAT (Accountant panel)
   subtotal     Int
   shippingCost Int
+  taxRate      Int     @default(0) // basis points, 1300 = 13%
+  taxTotal     Int     @default(0) // VAT amount in paisa
+  taxInclusive Boolean @default(true)
+  discountAmount Int   @default(0)
   total        Int
 
-  notes        String?
+  // Customer-facing notes vs staff-only internal notes (Ops panel)
+  notes           String?
+  internalNotes   String?
+
+  // Courier / tracking (Logistics panel)
+  courier         String? // pathao | nepal_can_move | aramex | fedex | other
+  trackingNumber  String?
+  courierShipmentId String?
+
+  // COD risk scoring (Logistics + CEO panels)
+  codRiskScore       Int?
+  codVerified        Boolean @default(false)
+  codVerificationMethod String?
+  riskScore          Int?    // 0-100 general risk
+  verificationStatus String  @default("unverified") // unverified | otp_verified | deposit_paid | admin_approved | rejected
+
+  // Dispute / refund tracking (CEO panel)
+  disputeStatus    String? // none | opened | under_review | won | lost
+  disputeReason    String?
+  disputeOpenedAt  DateTime?
+
+  // Marketing attribution (Marketing panel)
+  utm              String? // JSON { source, medium, campaign, term, content }
+  referrer         String?
+  affiliateId      String?
+  commissionAmount Int     @default(0)
+
+  // Coupon (Ecommerce panel)
+  couponId         String?
+  coupon           Coupon? @relation(fields: [couponId], references: [id])
+
+  // Status timestamps (Ops panel) — for SLA reporting
+  paidAt       DateTime?
+  shippedAt    DateTime?
+  deliveredAt  DateTime?
+  cancelledAt  DateTime?
+  refundedAt   DateTime?
+  heldReason   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   items     OrderItem[]
+  events    OrderEvent[]
+  refunds   Refund[]
+  returns   ReturnRequest[]
 
   @@unique([storeId, orderNumber])
   @@index([storeId])
+  @@index([storeId, status])
+  @@index([storeId, paymentStatus])
 }
 
 model OrderItem {
@@ -203,8 +335,63 @@ model OrderItem {
   title     String
   variantTitle String? // snapshot of variant title, e.g. "Red / Large"
   thumbnail String?
+  // Unit price snapshot — server-verified at checkout (never trusted from client)
   price     Int
+  taxRate   Int      @default(0)
+  taxAmount Int      @default(0)
   quantity  Int
+}
+
+// Order events — audit trail of every status change (Ops panel)
+model OrderEvent {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  type      String   // status_change | note_added | refund_issued | dispute_opened | ...
+  message   String
+  actorId   String?
+  actorKind String   @default("system") // system | user | customer | cron
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+}
+
+// Refunds (CEO panel) — full or partial
+model Refund {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount      Int      // paisa
+  reason      String
+  method      String   // original | esewa | khalti | bank_transfer | cash
+  status      String   @default("pending") // pending | processed | failed
+  processedAt DateTime?
+  transactionRef String?
+  initiatedBy String   @default("admin") // admin | customer | gateway
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@index([orderId])
+}
+
+// Return requests (Ops panel) — RMA workflow
+model ReturnRequest {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  storeId     String
+  reason      String
+  reasonCode  String   // size | defective | wrong_item | changed_mind | other
+  itemsRequested String? // JSON snapshot
+  status      String   @default("requested") // requested | approved | rejected | received | refunded | exchanged
+  refundAmount Int?
+  refundMethod String?
+  trackingNumber String?
+  resolvedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([orderId])
+  @@index([storeId])
 }
 
 model Customer {
@@ -217,9 +404,172 @@ model Customer {
   address   String?
   city      String?
   district  String?
+  // Privacy/compliance (Legal panel)
+  consentAt            DateTime?
+  consentVersion       String?
+  marketingOptIn       Boolean  @default(false)
+  requestedDeletionAt  DateTime?
+  anonymizedAt         DateTime?
+  dataExportedAt       DateTime?
+  // Preferred display currency (CEO panel)
+  preferredDisplayCurrency String?
   createdAt DateTime @default(now())
   orders    Order[]
 
   @@unique([storeId, phone])
+  @@index([storeId])
+}
+
+// ====== New: Audit log (Data panel) ======
+model AuditLog {
+  id        String   @id @default(cuid())
+  storeId   String?
+  store     Store?   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  actorId   String?
+  actorKind String   @default("anonymous") // anonymous | user | system | cron
+  action    String   // order.update | product.delete | store.update | ...
+  entityType String  // order | product | category | store | customer
+  entityId  String
+  before    String?  // JSON string
+  after     String?  // JSON string
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([storeId, entityType, createdAt])
+  @@index([actorId, createdAt])
+}
+
+// ====== New: Analytics events (Data panel) ======
+model AnalyticsEvent {
+  id        String   @id @default(cuid())
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  type      String   // page_view | product_view | add_to_cart | checkout_start | checkout_complete | checkout_abandon | search
+  sessionId String
+  userId    String?
+  productId String?
+  variantId String?
+  cartValue Int?     // paisa snapshot at event time
+  meta      String?  // JSON string
+  createdAt DateTime @default(now())
+
+  @@index([storeId, type, createdAt])
+  @@index([sessionId])
+}
+
+// ====== New: Newsletter subscribers (Marketing panel) ======
+model NewsletterSubscriber {
+  id        String   @id @default(cuid())
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  email     String?
+  phone     String?  // More valuable than email in Nepal
+  source    String   @default("footer") // footer | checkout | popup | exit_intent
+  consentAt DateTime @default(now())
+  unsubscribedAt DateTime?
+
+  @@index([storeId])
+}
+
+// ====== New: Coupons / discounts (Ecommerce + Influencer panels) ======
+model Coupon {
+  id          String   @id @default(cuid())
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  code        String   // unique per store
+  type        String   // percent | fixed | free_shipping
+  value       Int      // percent (bps) OR fixed amount in paisa
+  minSubtotal Int?
+  maxRedemptions Int?
+  perCustomerLimit Int?
+  startsAt    DateTime?
+  endsAt      DateTime?
+  status      String   @default("active") // active | paused | expired
+  influencerId String?
+  affiliateId String?
+  usageCount  Int      @default(0)
+  createdAt   DateTime @default(now())
+  orders      Order[]
+
+  @@unique([storeId, code])
+  @@index([storeId])
+}
+
+// ====== New: Product reviews (Ecommerce + Social panels) ======
+model ProductReview {
+  id            String   @id @default(cuid())
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  storeId       String
+  store         Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customerId    String?
+  customerName  String
+  customerPhone String?  // hashed for dedup, not displayed
+  rating        Int      // 1-5
+  title         String?
+  body          String?
+  imageUrl      String?
+  status        String   @default("pending") // pending | approved | rejected
+  verified      Boolean  @default(false) // verified buyer badge
+  createdAt     DateTime @default(now())
+
+  @@index([productId, status])
+  @@index([storeId])
+}
+
+// ====== New: Wishlist (Ecommerce panel) ======
+model Wishlist {
+  id        String   @id @default(cuid())
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customerId String?
+  sessionKey String
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantId String?
+  createdAt DateTime @default(now())
+
+  @@unique([sessionKey, productId, variantId])
+  @@index([storeId])
+}
+
+// ====== New: Abandoned cart (Marketing panel) ======
+model AbandonedCart {
+  id        String   @id @default(cuid())
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customerPhone String?
+  customerEmail String?
+  cartData  String   // JSON snapshot
+  cartValue Int      @default(0)
+  recoveryToken String? @unique
+  recoveredAt DateTime?
+  firstReminderSentAt DateTime?
+  secondReminderSentAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([storeId, recoveredAt])
+}
+
+// ====== New: Seller payouts (Accountant panel) — for platform commission settlement ======
+model SellerPayout {
+  id              String   @id @default(cuid())
+  storeId         String
+  store           Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  periodStartBs   String
+  periodEndBs     String
+  grossSales      Int      @default(0)
+  platformCommission Int   @default(0)
+  tdsRateBps      Int      @default(0)
+  tdsAmount       Int      @default(0)
+  netPayable      Int      @default(0)
+  status          String   @default("scheduled") // scheduled | paid | failed
+  paidAt          DateTime?
+  transactionRef  String?
+  payoutMethod    String?  // esewa | khalti | bank
+  createdAt       DateTime @default(now())
+
   @@index([storeId])
 }

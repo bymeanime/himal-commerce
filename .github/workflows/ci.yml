@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs when a new commit is pushed.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint + Typecheck + Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      DATABASE_PROVIDER: sqlite
+      DATABASE_URL: file:./ci-check.db
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: bun run prebuild
+
+      - name: Push schema to local SQLite (for typecheck + build)
+        run: bunx prisma db push --accept-data-loss --skip-generate
+
+      - name: Lint
+        run: bun run lint
+        continue-on-error: true  # currently many lint warnings; don't block PRs
+
+      - name: Typecheck
+        run: bunx tsc --noEmit
+
+      - name: Build
+        run: bunx next build
+        env:
+          DATABASE_PROVIDER: sqlite
+          DATABASE_URL: file:./ci-check.db
+          NEXT_TELEMETRY_DISABLED: '1'

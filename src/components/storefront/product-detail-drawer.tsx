@@ -16,13 +16,18 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { formatNPR } from '@/lib/nepal'
 import type { Product, ProductVariant } from '@/lib/types'
-import { Minus, Plus, ShoppingCart, MapPin, Hammer, Package, X, Layers } from 'lucide-react'
+import { Minus, Plus, ShoppingCart, MapPin, Hammer, Package, X, Layers, RotateCcw, Shield } from 'lucide-react'
 import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
+import { ShareRow } from '@/components/storefront/share-row'
+import { track } from '@/lib/analytics-client'
+import { captureUTM } from '@/lib/analytics-client'
+import { useCurrentStore } from '@/lib/use-current-store'
 
 export function ProductDetailDrawer() {
   const productId = useUI((s) => s.selectedProductId)
   const setSelectedProductId = useUI((s) => s.setSelectedProductId)
+  const { storeId } = useCurrentStore()
   const openCart = useCart((s) => s.open)
   const add = useCart((s) => s.add)
   const [qty, setQty] = useState(1)
@@ -52,6 +57,18 @@ export function ProductDetailDrawer() {
     setSelectedVariantId(null)
   }, [productId])
 
+  // Capture UTM params on first load (Marketing panel)
+  useEffect(() => {
+    captureUTM()
+  }, [])
+
+  // Fire product_view analytics event when drawer opens (Marketing panel P0)
+  useEffect(() => {
+    if (product && storeId) {
+      track('product_view', { storeId, productId: product.id, cartValue: product.price })
+    }
+  }, [product, storeId])
+
   // Effective price + inventory for the add-to-cart action
   const effectivePrice = selectedVariant?.price ?? product?.price ?? 0
   const effectiveInventory = hasVariants
@@ -65,6 +82,15 @@ export function ProductDetailDrawer() {
       return
     }
     add(product, qty, selectedVariant)
+    // Fire add_to_cart analytics event (Marketing panel P0)
+    if (storeId) {
+      track('add_to_cart', {
+        storeId,
+        productId: product.id,
+        variantId: selectedVariant?.id,
+        cartValue: effectivePrice * qty,
+      })
+    }
     const label = selectedVariant
       ? `${qty} × ${product.title} — ${selectedVariant.title}`
       : `${qty} × ${product.title}`
@@ -248,6 +274,46 @@ export function ProductDetailDrawer() {
                 <p className="text-xs text-muted-foreground">
                   SKU: {selectedVariant?.sku || product.sku}
                 </p>
+              )}
+
+              <Separator />
+
+              {/* Share buttons (Social panel P1) — Viber + WhatsApp prioritized for Nepal */}
+              {typeof window !== 'undefined' && (
+                <ShareRow
+                  title={product.title}
+                  url={product.slug ? `/p/${product.slug}` : `/api/products/${product.id}`}
+                />
+              )}
+
+              {/* Trust signals (CRO panel P1) */}
+              <div className="grid grid-cols-3 gap-2 pt-2">
+                <div className="text-center p-2 rounded-md bg-secondary/50">
+                  <Package className="h-4 w-4 mx-auto text-emerald-600" />
+                  <p className="text-[10px] text-muted-foreground mt-1">Ships in 24h</p>
+                </div>
+                <div className="text-center p-2 rounded-md bg-secondary/50">
+                  <RotateCcw className="h-4 w-4 mx-auto text-blue-600" />
+                  <p className="text-[10px] text-muted-foreground mt-1">7-day returns</p>
+                </div>
+                <div className="text-center p-2 rounded-md bg-secondary/50">
+                  <Shield className="h-4 w-4 mx-auto text-purple-600" />
+                  <p className="text-[10px] text-muted-foreground mt-1">Secure checkout</p>
+                </div>
+              </div>
+
+              {/* Restricted product warning (Legal panel P1) */}
+              {product.restrictedCategory && product.restrictedCategory !== 'none' && (
+                <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3">
+                  <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+                    Age-restricted product · 18+ only
+                  </p>
+                  {product.healthWarningText && (
+                    <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                      {product.healthWarningText}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           </>

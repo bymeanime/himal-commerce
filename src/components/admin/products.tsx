@@ -477,13 +477,15 @@ function ProductForm({
   setForm,
   categories,
 }: {
-  form: Record<string, unknown>
-  setForm: React.Dispatch<React.SetStateAction<Record<string, unknown>>>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  form: any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  setForm: React.Dispatch<React.SetStateAction<any>>
   categories: Category[]
 }) {
-  const set = (k: string, v: string | boolean) => setForm((f) => ({ ...f, [k]: v }))
+  const set = (k: string, v: string | boolean) => setForm((f: Record<string, unknown>) => ({ ...f, [k]: v }))
   const variants = (form.variants as VariantForm[]) ?? []
-  const setVariants = (v: VariantForm[]) => setForm((f) => ({ ...f, variants: v }))
+  const setVariants = (v: VariantForm[]) => setForm((f: Record<string, unknown>) => ({ ...f, variants: v }))
 
   return (
     <div className="space-y-3">

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { logAudit } from '@/lib/audit'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -22,9 +23,27 @@ type ImageInput = {
   _destroy?: boolean
 }
 
-// GET /api/products/[id]
-export async function GET(_req: NextRequest, { params }: Params) {
+// Helper — multi-tenant isolation check (Tech/API/QA panels P0).
+// Every [id] route must verify the entity belongs to the requesting store.
+async function verifyOwnership(productId: string, storeId: string) {
+  const product = await db.product.findUnique({
+    where: { id: productId },
+    select: { storeId: true },
+  })
+  if (!product) return null
+  if (product.storeId !== storeId) return null  // 404 — don't leak existence
+  return product
+}
+
+// GET /api/products/[id]?storeId=...
+export async function GET(req: NextRequest, { params }: Params) {
   const { id } = await params
+  const storeId = new URL(req.url).searchParams.get('storeId')
+  if (storeId) {
+    // Tenant isolation check (only enforced when storeId is provided)
+    const owns = await verifyOwnership(id, storeId)
+    if (!owns) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
+  }
   const product = await db.product.findUnique({
     where: { id },
     include: {
@@ -32,6 +51,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       store: true,
       variants: { orderBy: { sortOrder: 'asc' } },
       images: { orderBy: { sortOrder: 'asc' } },
+      reviews: { where: { status: 'approved' }, orderBy: { createdAt: 'desc' }, take: 10 },
     },
   })
   if (!product) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
@@ -42,6 +62,14 @@ export async function GET(_req: NextRequest, { params }: Params) {
 export async function PUT(req: NextRequest, { params }: Params) {
   const { id } = await params
   const body = await req.json()
+  const storeId = body.storeId
+  if (!storeId) {
+    return NextResponse.json({ error: 'storeId is required for authorization' }, { status: 400 })
+  }
+  const owns = await verifyOwnership(id, storeId)
+  if (!owns) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
+
+  const before = await db.product.findUnique({ where: { id }, include: { variants: true } })
 
   const data: Record<string, unknown> = {}
   if (body.title !== undefined) data.title = body.title
@@ -52,12 +80,25 @@ export async function PUT(req: NextRequest, { params }: Params) {
   if (body.price !== undefined) data.price = Math.round(Number(body.price) * 100)
   if (body.compareAt !== undefined) data.compareAt = body.compareAt ? Math.round(Number(body.compareAt) * 100) : null
   if (body.sku !== undefined) data.sku = body.sku
+  if (body.gtin !== undefined) data.gtin = body.gtin || null
+  if (body.barcode !== undefined) data.barcode = body.barcode || null
   if (body.status !== undefined) data.status = body.status
   if (body.inventory !== undefined) data.inventory = Number(body.inventory)
   if (body.weightGrams !== undefined) data.weightGrams = body.weightGrams ? Number(body.weightGrams) : null
+  if (body.lengthMm !== undefined) data.lengthMm = body.lengthMm ? Number(body.lengthMm) : null
+  if (body.widthMm !== undefined) data.widthMm = body.widthMm ? Number(body.widthMm) : null
+  if (body.heightMm !== undefined) data.heightMm = body.heightMm ? Number(body.heightMm) : null
   if (body.origin !== undefined) data.origin = body.origin
   if (body.isHandmade !== undefined) data.isHandmade = Boolean(body.isHandmade)
   if (body.categoryId !== undefined) data.categoryId = body.categoryId || null
+  if (body.lowStockThreshold !== undefined) data.lowStockThreshold = Number(body.lowStockThreshold) || 5
+  if (body.specifications !== undefined) data.specifications = body.specifications || null
+  if (body.artisanStory !== undefined) data.artisanStory = body.artisanStory || null
+  if (body.careGuide !== undefined) data.careGuide = body.careGuide || null
+  if (body.restrictedCategory !== undefined) data.restrictedCategory = body.restrictedCategory
+  if (body.ageRestricted !== undefined) data.ageRestricted = Boolean(body.ageRestricted)
+  if (body.minAge !== undefined) data.minAge = Number(body.minAge) || 0
+  if (body.healthWarningText !== undefined) data.healthWarningText = body.healthWarningText || null
 
   // Variants: diff by id (existing), create (no id), delete (_destroy)
   if (Array.isArray(body.variants)) {
@@ -67,13 +108,11 @@ export async function PUT(req: NextRequest, { params }: Params) {
     const toDelete = existing.filter(e => !incomingIds.has(e.id)).map(e => e.id)
     const toDestroy = incoming.filter(v => v.id && v._destroy).map(v => v.id!)
 
-    // Delete variants that are no longer in the list or explicitly marked
     const allToDelete = Array.from(new Set([...toDelete, ...toDestroy]))
     if (allToDelete.length) {
       await db.productVariant.deleteMany({ where: { id: { in: allToDelete }, productId: id } })
     }
 
-    // Update existing + create new
     data.variants = {
       update: incoming.filter(v => v.id && !v._destroy).map(v => ({
         where: { id: v.id },
@@ -136,12 +175,39 @@ export async function PUT(req: NextRequest, { params }: Params) {
       images: { orderBy: { sortOrder: 'asc' } },
     },
   })
+
+  await logAudit({
+    storeId,
+    actorKind: 'user',
+    action: 'product.update',
+    entityType: 'product',
+    entityId: id,
+    before: before ? { title: before.title, price: before.price, inventory: before.inventory } : null,
+    after: { title: product.title, price: product.price, inventory: product.inventory },
+  })
+
   return NextResponse.json({ product })
 }
 
-// DELETE /api/products/[id]
-export async function DELETE(_req: NextRequest, { params }: Params) {
+// DELETE /api/products/[id]?storeId=...
+export async function DELETE(req: NextRequest, { params }: Params) {
   const { id } = await params
+  const storeId = new URL(req.url).searchParams.get('storeId')
+  if (!storeId) {
+    return NextResponse.json({ error: 'storeId is required for authorization' }, { status: 400 })
+  }
+  const owns = await verifyOwnership(id, storeId)
+  if (!owns) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
+
   await db.product.delete({ where: { id } })
+
+  await logAudit({
+    storeId,
+    actorKind: 'user',
+    action: 'product.delete',
+    entityType: 'product',
+    entityId: id,
+  })
+
   return NextResponse.json({ ok: true })
 }
