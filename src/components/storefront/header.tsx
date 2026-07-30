@@ -1,6 +1,6 @@
 'use client'
 
-import { ShoppingCart, Mountain, Menu, Search, Phone, ArrowLeft, Store as StoreIcon } from 'lucide-react'
+import { ShoppingCart, Mountain, Menu, Search, Phone, ArrowLeft, Store as StoreIcon, Heart, PackageSearch, Mail } from 'lucide-react'
 import { useCart } from '@/lib/cart-store'
 import { useUI } from '@/lib/ui-store'
 import { useCurrentStore } from '@/lib/use-current-store'
@@ -24,10 +24,13 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { Category } from '@/lib/types'
 import { CurrencyToggle } from './currency-toggle'
+import { useWishlist } from '@/lib/wishlist-store'
+import Link from 'next/link'
 
 export function StorefrontHeader() {
   const cartCount = useCart((s) => s.items.reduce((sum, i) => sum + i.quantity, 0))
   const openCart = useCart((s) => s.open)
+  const wishlistCount = useWishlist((s) => s.productIds.length)
   const setStoreSection = useUI((s) => s.setStoreSection)
   const setSelectedCategorySlug = useUI((s) => s.setSelectedCategorySlug)
   const exitToPlatform = useUI((s) => s.exitToPlatform)
@@ -47,6 +50,13 @@ export function StorefrontHeader() {
     { id: 'products' as const, label: 'Shop All' },
     { id: 'about' as const, label: 'About Himal' },
   ]
+
+  // Links to SSR routes (open in same tab)
+  const accountLinks = store ? [
+    { href: `/s/${store.slug}/wishlist`, label: 'Wishlist', icon: Heart, count: wishlistCount },
+    { href: `/s/${store.slug}/orders`, label: 'My Orders', icon: PackageSearch },
+    { href: `/s/${store.slug}/contact`, label: 'Contact', icon: Mail },
+  ] : []
 
   const goToCategory = (slug: string) => {
     setSelectedCategorySlug(slug)
@@ -133,6 +143,25 @@ export function StorefrontHeader() {
           <div className="hidden sm:block">
             <CurrencyToggle />
           </div>
+          {/* Account links (wishlist, orders, contact) — desktop */}
+          <div className="hidden md:flex items-center gap-1">
+            {accountLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="relative h-9 w-9 rounded-md grid place-items-center hover:bg-secondary transition-colors"
+                aria-label={link.label}
+                title={link.label}
+              >
+                <link.icon className="h-4 w-4" />
+                {link.count ? (
+                  <Badge className="absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-full bg-accent text-accent-foreground text-[10px] border-2 border-background">
+                    {link.count}
+                  </Badge>
+                ) : null}
+              </Link>
+            ))}
+          </div>
           <Button
             variant="outline"
             size="sm"
@@ -201,6 +230,23 @@ export function StorefrontHeader() {
                     ))}
                   </>
                 )}
+                <div className="my-2 border-t" />
+                {/* Account links in mobile menu */}
+                {accountLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="flex items-center justify-between px-3 py-2 rounded-md hover:bg-secondary text-sm"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    <span className="flex items-center gap-2">
+                      <link.icon className="h-4 w-4" /> {link.label}
+                    </span>
+                    {link.count ? (
+                      <Badge className="bg-accent text-accent-foreground text-[10px]">{link.count}</Badge>
+                    ) : null}
+                  </Link>
+                ))}
                 <div className="my-2 border-t" />
                 <Button
                   variant="outline"

@@ -115,6 +115,25 @@ export function StorefrontFooter() {
                   About us
                 </button>
               </li>
+              {store && (
+                <>
+                  <li>
+                    <Link href={`/s/${store.slug}/wishlist`} className="hover:text-foreground transition-colors">
+                      Wishlist
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href={`/s/${store.slug}/orders`} className="hover:text-foreground transition-colors">
+                      Find my order
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href={`/s/${store.slug}/contact`} className="hover:text-foreground transition-colors">
+                      Contact us
+                    </Link>
+                  </li>
+                </>
+              )}
               <li>
                 <button onClick={() => useUI.setState({ view: 'admin' })} className="hover:text-foreground transition-colors">
                   Store admin

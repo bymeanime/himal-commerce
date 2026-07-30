@@ -19,20 +19,28 @@ async function generateProductSlug(title: string, storeId: string, excludeId?: s
   }
 }
 
-// GET /api/products?storeId=xxx&category=slug&status=published&q=search
+// GET /api/products?storeId=xxx&category=slug&status=published&q=search&ids=id1,id2
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const storeId = searchParams.get('storeId')
   const category = searchParams.get('category')
   const status = searchParams.get('status') || 'published'
   const q = searchParams.get('q')
+  const ids = searchParams.get('ids')
 
   if (!storeId) {
     return NextResponse.json({ error: 'storeId is required' }, { status: 400 })
   }
 
   const where: Record<string, unknown> = { storeId }
-  if (status && status !== 'all') where.status = status
+  // When fetching by explicit IDs (e.g. wishlist), do not filter by status —
+  // the wishlist already contains product IDs the user explicitly saved.
+  if (ids) {
+    const idArr = ids.split(',').map((s) => s.trim()).filter(Boolean)
+    where.id = { in: idArr }
+  } else if (status && status !== 'all') {
+    where.status = status
+  }
   if (category && category !== 'all') {
     where.category = { slug: category, storeId }
   }

@@ -58,6 +58,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: 'monthly',
       priority: 0.5,
     })
+    // Contact page
+    storeEntries.push({
+      url: `${baseUrl}/s/${store.slug}/contact`,
+      lastModified: store.updatedAt,
+      changeFrequency: 'monthly',
+      priority: 0.5,
+    })
     // Blog index
     storeEntries.push({
       url: `${baseUrl}/s/${store.slug}/blog`,

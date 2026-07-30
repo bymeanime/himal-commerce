@@ -35,12 +35,14 @@ import {
   Star,
   HeartHandshake,
   AlertTriangle,
+  Ticket,
+  RotateCcw,
 } from 'lucide-react'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import type { Store } from '@/lib/types'
 
-type Section = 'dashboard' | 'products' | 'orders' | 'customers' | 'categories' | 'blog' | 'marketing' | 'reviews' | 'abandoned' | 'settings'
+type Section = 'dashboard' | 'products' | 'orders' | 'customers' | 'categories' | 'blog' | 'marketing' | 'reviews' | 'abandoned' | 'coupons' | 'returns' | 'settings'
 
 const NAV: { id: Section; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -49,9 +51,11 @@ const NAV: { id: Section; label: string; icon: React.ComponentType<{ className?:
   { id: 'categories', label: 'Categories', icon: FolderTree },
   { id: 'customers', label: 'Customers', icon: Users },
   { id: 'reviews', label: 'Reviews', icon: Star },
+  { id: 'abandoned', label: 'Abandoned Carts', icon: HeartHandshake },
+  { id: 'coupons', label: 'Coupons', icon: Ticket },
+  { id: 'returns', label: 'Returns', icon: RotateCcw },
   { id: 'blog', label: 'Blog', icon: FileText },
   { id: 'marketing', label: 'Marketing', icon: Megaphone },
-  { id: 'abandoned', label: 'Abandoned Carts', icon: HeartHandshake },
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
 

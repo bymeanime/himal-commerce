@@ -11,6 +11,8 @@ import { AdminBlog } from './blog'
 import { AdminMarketing } from './marketing'
 import { AdminReviews } from './reviews'
 import { AdminAbandonedCarts } from './abandoned-carts'
+import { AdminCoupons } from './coupons'
+import { AdminReturns } from './returns'
 import { useUI } from '@/lib/ui-store'
 import { useCurrentStore } from '@/lib/use-current-store'
 import { Button } from '@/components/ui/button'
@@ -43,9 +45,11 @@ export function Admin() {
       {section === 'customers' && <AdminCustomers />}
       {section === 'categories' && <AdminCategories />}
       {section === 'reviews' && <AdminReviews />}
+      {section === 'abandoned' && <AdminAbandonedCarts />}
+      {section === 'coupons' && <AdminCoupons />}
+      {section === 'returns' && <AdminReturns />}
       {section === 'blog' && <AdminBlog />}
       {section === 'marketing' && <AdminMarketing />}
-      {section === 'abandoned' && <AdminAbandonedCarts />}
       {section === 'settings' && <AdminSettings />}
     </AdminShell>
   )
