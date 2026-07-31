@@ -3373,3 +3373,53 @@ Stage Summary:
 - All API routes responding correctly
 - DB connection healthy (latency 2ms)
 - Next phase: live multi-role QA audit on production URLs to verify fixes hold up against real traffic
+
+---
+Task ID: qa-live-1
+Agent: main
+Task: Live QA re-test of Phase 6 deploy + competitive audit findings
+
+Work Log:
+- Built live QA scripts at /home/z/my-project/scripts/qa-live/
+  - run_live_qa.py — probes each P0/P1 fix from Phase 6 against production URL
+  - run_focused_qa.py — storefront route smoke tests + extra IDOR probes
+- Ran QA against https://himal-commerce.vercel.app (Phase 6 deploy)
+- Initial run found 7 P0 regressions:
+  1. /api/stores LIST was leaking ownerEmail, ownerPhone, supportPhone, supportEmail, address (QA-007 only fixed [id] route, not list)
+  2. /api/products/[id] still returned product data without storeId (QA-002 fix was claimed in worklog but not actually applied in code)
+  3. /api/orders?storeId= had NO auth — leaked 4 orders with customer PII
+  4. /api/customers?storeId= had NO auth — leaked customer PII
+  5. /api/dashboard, /api/audit-logs, /api/abandoned-carts, /api/returns, /api/coupons, /api/refunds, /api/export/* — all had no auth on GET
+  6. /api/affiliates, /api/influencers — only had verifyStoreAccess (existence check, not real auth)
+  7. /api/orders/[id] had storeId gate but no real auth — anyone with public storeId + guessable order number (HC-1001) could fetch full order
+
+- Built Phase 6.1 fix:
+  - New src/lib/admin-auth.ts — requireAdmin() helper, fail-closed if ADMIN_TOKEN env var is unset (mirrors CRON_SECRET pattern)
+  - Accepts either x-admin-token header (API clients) or himal_admin_token cookie (browser admin UI)
+  - New /api/admin-login + /api/admin-logout routes — set/clear httpOnly cookie
+  - New src/lib/admin-api-client.ts — adminFetch() wrapper that auto-attaches header from localStorage
+  - Applied requireAdmin() to 13 admin-only endpoints: /api/orders, /api/orders/[id], /api/customers, /api/dashboard, /api/audit-logs, /api/abandoned-carts, /api/returns, /api/coupons, /api/refunds, /api/affiliates, /api/influencers, /api/export/{customers,products,orders}
+  - Fixed /api/products/[id] — storeId is now MANDATORY (was opt-in)
+  - Fixed /api/stores LIST + ?slug= — public-safe field projection (no ownerEmail/Phone/supportPhone/supportEmail/address/PAN/VAT)
+  - Build passes (bun run build), no new TypeScript errors
+
+- Committed as d944f36 (Phase 6.1), pushed, Vercel auto-deployed
+- Re-ran live QA against fresh deploy — 48/48 PASS
+
+Stage Summary:
+- Phase 6.1 commit d944f36 live at https://himal-commerce.vercel.app
+- All 7 P0 regressions from live QA are now CLOSED
+- Live QA results (final):
+  - Live QA suite: 18 PASS, 0 FAIL, 5 SKIP (SKIP = needs real auth session)
+  - Focused QA suite: 30 PASS, 0 FAIL, 0 SKIP
+  - Combined: 48/48 actionable tests PASS
+- ADMIN_TOKEN env var must be set in Vercel before admin UI will work (currently returns 503 — fail-closed by design)
+- CRON_SECRET env var must be set before cron sweeps will run (currently returns 500 — fail-closed by design)
+- Reports saved at /home/z/my-project/scripts/qa-live/{live,focused}_qa_report.json
+- QA scripts are reusable — run `python3 scripts/qa-live/run_live_qa.py` after any deploy to verify
+
+Outstanding items (NOT P0 — can ship as-is):
+- Real next-auth integration (currently using token stopgap)
+- Product variants, categories, social media links (still on backlog from prior session)
+- 26 pre-existing lint errors (unchanged from Phase 6)
+- Live QA showed /api/blog?storeId= returns empty — blog seed data may be missing
