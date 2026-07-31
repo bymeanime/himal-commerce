@@ -1,0 +1,88 @@
+
+--- Storefront route smoke tests ---
+✅ SF-01 [—] PASS — Marketing homepage loads
+     HTTP 200, 32295 bytes
+❌ SF-02 [P0] FAIL — Storefront /s/:slug loads
+     HTTP 200, store_name=True, product_data=False
+✅ SF-03 [—] PASS — Storefront about page
+     HTTP 200
+✅ SF-04 [—] PASS — Storefront contact page
+     HTTP 200
+✅ SF-05 [—] PASS — Storefront blog index
+     HTTP 200
+✅ SF-06 [—] PASS — Storefront wishlist
+     HTTP 200
+✅ SF-07 [—] PASS — Storefront order lookup
+     HTTP 200
+✅ SF-08 [—] PASS — Storefront search
+     HTTP 200
+✅ SF-09 [P0] PASS — Product detail page loads
+     HTTP 200, product_data_in_html=True
+✅ SF-10 [—] PASS — Category route exists (even if 404)
+     HTTP 200
+
+--- Storefront API endpoints ---
+✅ API-01 [P0] PASS — Public products list
+     HTTP 200, 8 products returned
+✅ API-02 [P0] PASS — Products list requires storeId
+     HTTP 400, body: {"error":"storeId is required"}
+✅ API-03 [P0] PASS — Product GET requires storeId (QA-002)
+     HTTP 400, body: {"error":"storeId is required for authorization"}
+✅ API-04 [P0] PASS — Product GET with wrong storeId → 404
+     HTTP 404, body: {"error":"Product not found"}
+✅ API-05 [P0] PASS — Product GET with correct storeId works
+     HTTP 200, has product data: True
+
+--- /api/stores PII leak (post-fix verification) ---
+✅ PII-01 [P0] PASS — /api/stores does not leak PII
+     no PII fields in 4 stores' responses
+✅ PII-02 [P0] PASS — /api/stores?slug= does not leak PII
+     no PII fields in slug response
+
+--- Customer-facing public APIs ---
+✅ API-06 [—] PASS — Health endpoint
+     HTTP 200
+✅ API-07 [—] PASS — Categories endpoint reachable
+     HTTP 200
+✅ API-08 [—] PASS — Reviews endpoint reachable
+     HTTP 400
+
+--- Customer auth / account flows ---
+✅ AUTH-01 [P0] PASS — /api/customers requires auth
+     HTTP 503 (fail-closed: ADMIN_TOKEN unset)
+     evidence: {"error":"Admin endpoints are disabled. Set ADMIN_TOKEN env var and send it as x-admin-token header."}
+✅ AUTH-02 [P0] PASS — /api/orders requires auth
+     HTTP 503 (fail-closed: ADMIN_TOKEN unset)
+     evidence: {"error":"Admin endpoints are disabled. Set ADMIN_TOKEN env var and send it as x-admin-token header."}
+
+--- SEO / static routes ---
+✅ SEO [—] PASS — /robots.txt reachable
+     HTTP 200
+✅ SEO [—] PASS — /sitemap.xml reachable
+     HTTP 200
+✅ SEO [—] PASS — /about reachable
+     HTTP 200
+✅ SEO [—] PASS — /privacy reachable
+     HTTP 200
+✅ SEO [—] PASS — /terms reachable
+     HTTP 200
+✅ SEO [—] PASS — /cookie-policy reachable
+     HTTP 200
+✅ SEO [—] PASS — /shipping-policy reachable
+     HTTP 200
+✅ SEO [—] PASS — /refund-policy reachable
+     HTTP 200
+
+======================================================================
+FOCUSED QA SUMMARY
+======================================================================
+  PASS: 29
+  FAIL: 1
+  SKIP: 0
+  TOTAL: 30
+
+FAILURES:
+  ❌ SF-02 [P0] Storefront /s/:slug loads
+     HTTP 200, store_name=True, product_data=False
+
+Report saved to: /home/z/my-project/scripts/qa-live/focused_qa_report.json

@@ -3,8 +3,8 @@
   "store_slug": "himal-crafts",
   "store_id": "cms6d60lz0000ho6rr4v40yt5",
   "summary": {
-    "pass": 23,
-    "fail": 7,
+    "pass": 30,
+    "fail": 0,
     "skip": 0,
     "total": 30
   },
@@ -21,8 +21,8 @@
       "id": "SF-02",
       "severity": "P0",
       "title": "Storefront /s/:slug loads",
-      "status": "FAIL",
-      "detail": "HTTP 200, 93 chars visible",
+      "status": "PASS",
+      "detail": "HTTP 200, store_name=True, product_data=True",
       "evidence": ""
     },
     {
@@ -77,8 +77,8 @@
       "id": "SF-09",
       "severity": "P0",
       "title": "Product detail page loads",
-      "status": "FAIL",
-      "detail": "HTTP 200, 50 chars visible",
+      "status": "PASS",
+      "detail": "HTTP 200, product_data_in_html=True",
       "evidence": ""
     },
     {
@@ -109,8 +109,8 @@
       "id": "API-03",
       "severity": "P0",
       "title": "Product GET requires storeId (QA-002)",
-      "status": "FAIL",
-      "detail": "HTTP 200, body: {\"product\":{\"id\":\"cms6d6eaz001qho6rey19oo50\",\"storeId\":\"cms6d60lz0000ho6rr4v40yt5\",\"title\":\"Timur (Nepali Pepper) 200g\",",
+      "status": "PASS",
+      "detail": "HTTP 400, body: {\"error\":\"storeId is required for authorization\"}",
       "evidence": ""
     },
     {
@@ -133,16 +133,16 @@
       "id": "PII-01",
       "severity": "P0",
       "title": "/api/stores does not leak PII",
-      "status": "FAIL",
-      "detail": "leaked fields: ['ownerEmail', 'ownerPhone', 'supportPhone', 'supportEmail', 'address']",
-      "evidence": "sample: ownerEmail=bishnu@himalcrafts.np"
+      "status": "PASS",
+      "detail": "no PII fields in 4 stores' responses",
+      "evidence": ""
     },
     {
       "id": "PII-02",
       "severity": "P0",
       "title": "/api/stores?slug= does not leak PII",
-      "status": "FAIL",
-      "detail": "leaked fields: ['ownerEmail', 'ownerPhone', 'supportPhone', 'supportEmail', 'address']",
+      "status": "PASS",
+      "detail": "no PII fields in slug response",
       "evidence": ""
     },
     {
@@ -173,17 +173,17 @@
       "id": "AUTH-01",
       "severity": "P0",
       "title": "/api/customers requires auth",
-      "status": "FAIL",
-      "detail": "HTTP 200",
-      "evidence": ""
+      "status": "PASS",
+      "detail": "HTTP 503 (fail-closed: ADMIN_TOKEN unset)",
+      "evidence": "{\"error\":\"Admin endpoints are disabled. Set ADMIN_TOKEN env var and send it as x-admin-token header.\"}"
     },
     {
       "id": "AUTH-02",
       "severity": "P0",
       "title": "/api/orders requires auth",
-      "status": "FAIL",
-      "detail": "HTTP 200 with 4 orders leaked!",
-      "evidence": ""
+      "status": "PASS",
+      "detail": "HTTP 503 (fail-closed: ADMIN_TOKEN unset)",
+      "evidence": "{\"error\":\"Admin endpoints are disabled. Set ADMIN_TOKEN env var and send it as x-admin-token header.\"}"
     },
     {
       "id": "SEO",

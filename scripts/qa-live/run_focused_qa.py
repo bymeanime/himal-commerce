@@ -74,9 +74,14 @@ check("SF-01", "—", "Marketing homepage loads", "PASS" if code == 200 else "FA
 
 # /s/[slug]
 code, _, body = http("GET", f"/s/{STORE_SLUG}")
-text = extract_text(body)
-check("SF-02", "P0", "Storefront /s/:slug loads", "PASS" if code == 200 and len(text) > 500 else "FAIL",
-      f"HTTP {code}, {len(text)} chars visible")
+# Storefront is a client-rendered React app — the HTML payload contains RSC chunks
+# with product data, even though visible-text extraction yields few chars.
+# Check for presence of expected content markers instead.
+html = body.decode("utf-8", errors="replace")
+has_store_name = "Himal Crafts" in html
+has_product_data = "timur-nepali-pepper" in html or "silver-turquoise" in html or "lokta-paper" in html
+check("SF-02", "P0", "Storefront /s/:slug loads", "PASS" if code == 200 and has_store_name and has_product_data else "FAIL",
+      f"HTTP {code}, store_name={has_store_name}, product_data={has_product_data}")
 
 # /s/[slug]/about
 code, _, body = http("GET", f"/s/{STORE_SLUG}/about")
@@ -110,9 +115,11 @@ check("SF-08", "—", "Storefront search", "PASS" if code == 200 else "FAIL",
 
 # /s/[slug]/p/[productSlug]
 code, _, body = http("GET", f"/s/{STORE_SLUG}/p/{SAMPLE_PRODUCT_SLUG}")
-text = extract_text(body)
-check("SF-09", "P0", "Product detail page loads", "PASS" if code == 200 and len(text) > 500 else "FAIL",
-      f"HTTP {code}, {len(text)} chars visible")
+html = body.decode("utf-8", errors="replace")
+# Product detail page should contain the product name/title in HTML (RSC payload)
+has_product = "Timur" in html or SAMPLE_PRODUCT_SLUG in html
+check("SF-09", "P0", "Product detail page loads", "PASS" if code == 200 and has_product else "FAIL",
+      f"HTTP {code}, product_data_in_html={has_product}")
 
 # /s/[slug]/c/[categorySlug] — try a fake category
 code, _, body = http("GET", f"/s/{STORE_SLUG}/c/test")
@@ -219,27 +226,36 @@ check("API-08", "—", "Reviews endpoint reachable", "PASS" if code in (200, 400
 # ---------------- Customer auth flow ----------------
 print("\n--- Customer auth / account flows ---")
 
-# /api/customers (admin-only — should reject)
+# /api/customers (admin-only — should reject with 401/403, or 503 if ADMIN_TOKEN unset)
 code, _, body = http("GET", f"/api/customers?storeId={STORE_ID}")
-check("AUTH-01", "P0", "/api/customers requires auth", "PASS" if code in (400, 401, 403) else "FAIL",
-      f"HTTP {code}")
-
-# /api/orders (admin-only — should reject or return empty)
-code, _, body = http("GET", f"/api/orders?storeId={STORE_ID}")
-parsed = parse_json(body)
-if code == 200:
-    # If 200, ensure no real orders leaked
-    orders = parsed.get("orders", parsed) if parsed else []
-    if isinstance(orders, list) and len(orders) == 0:
-        check("AUTH-02", "P0", "/api/orders requires auth", "PASS",
-              f"HTTP {code} (empty list returned, no leak)")
-    else:
-        check("AUTH-02", "P0", "/api/orders requires auth", "FAIL",
-              f"HTTP {code} with {len(orders) if isinstance(orders, list) else '?'} orders leaked!")
-elif code in (400, 401, 403):
-    check("AUTH-02", "P0", "/api/orders requires auth", "PASS", f"HTTP {code}")
+body_text = body.decode("utf-8", errors="replace")
+if code in (401, 403):
+    check("AUTH-01", "P0", "/api/customers requires auth", "PASS", f"HTTP {code} (auth rejected)", body_text[:120])
+elif code == 503 and "ADMIN_TOKEN" in body_text:
+    check("AUTH-01", "P0", "/api/customers requires auth", "PASS", f"HTTP {code} (fail-closed: ADMIN_TOKEN unset)", body_text[:120])
+elif code == 200:
+    check("AUTH-01", "P0", "/api/customers requires auth", "FAIL", f"HTTP {code} — customer data leaked!", body_text[:200])
 else:
-    check("AUTH-02", "P0", "/api/orders requires auth", "FAIL", f"HTTP {code}")
+    check("AUTH-01", "P0", "/api/customers requires auth", "FAIL", f"HTTP {code}", body_text[:120])
+
+# /api/orders (admin-only — should reject with 401/403, or 503 if ADMIN_TOKEN unset)
+code, _, body = http("GET", f"/api/orders?storeId={STORE_ID}")
+body_text = body.decode("utf-8", errors="replace")
+if code in (401, 403):
+    check("AUTH-02", "P0", "/api/orders requires auth", "PASS", f"HTTP {code} (auth rejected)", body_text[:120])
+elif code == 503 and "ADMIN_TOKEN" in body_text:
+    check("AUTH-02", "P0", "/api/orders requires auth", "PASS", f"HTTP {code} (fail-closed: ADMIN_TOKEN unset)", body_text[:120])
+elif code == 200:
+    parsed = parse_json(body)
+    orders = (parsed or {}).get("orders", []) if parsed else []
+    if isinstance(orders, list) and len(orders) > 0:
+        check("AUTH-02", "P0", "/api/orders requires auth", "FAIL",
+              f"HTTP {code} with {len(orders)} orders leaked!", body_text[:200])
+    else:
+        check("AUTH-02", "P0", "/api/orders requires auth", "PASS",
+              f"HTTP {code} (empty list returned, no leak)", body_text[:120])
+else:
+    check("AUTH-02", "P0", "/api/orders requires auth", "FAIL", f"HTTP {code}", body_text[:120])
 
 
 # ---------------- Static / SEO routes ----------------
