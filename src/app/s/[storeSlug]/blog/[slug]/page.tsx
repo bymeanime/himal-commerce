@@ -1,3 +1,4 @@
+import { safeJsonLd } from '@/lib/jsonld'
 import { db } from '@/lib/db'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
@@ -13,6 +14,28 @@ type Params = {
 }
 
 // Simple markdown-to-HTML renderer (no external dep)
+// SECURITY (QA-010 fix): after rendering, we sanitize dangerous URL schemes
+// (javascript:, data:, vbscript:) from href/src attributes. HTML is already
+// escaped at the top so raw <script> tags are inert, but markdown link/image
+// syntax can still inject dangerous URLs.
+function sanitizeUrl(url: string): string {
+  const trimmed = url.trim().toLowerCase()
+  // Allow http, https, mailto, tel, and relative URLs (/, #, ?)
+  if (
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('mailto:') ||
+    trimmed.startsWith('tel:') ||
+    trimmed.startsWith('/') ||
+    trimmed.startsWith('#') ||
+    trimmed.startsWith('?')
+  ) {
+    return url
+  }
+  // Block everything else (javascript:, data:, vbscript:, file:, etc.)
+  return '#'
+}
+
 function renderMarkdown(md: string): string {
   // Escape HTML
   let html = md
@@ -34,16 +57,16 @@ function renderMarkdown(md: string): string {
   html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
   html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>')
 
-  // Images
+  // Images — sanitize URL (QA-010)
   html = html.replace(
     /!\[([^\]]*)\]\(([^)]+)\)/g,
-    '<img src="$2" alt="$1" class="rounded-lg w-full my-4" />'
+    (_match, alt, url) => `<img src="${sanitizeUrl(url)}" alt="${alt}" class="rounded-lg w-full my-4" />`
   )
 
-  // Links
+  // Links — sanitize URL (QA-010)
   html = html.replace(
     /\[([^\]]+)\]\(([^)]+)\)/g,
-    '<a href="$2" class="text-primary underline hover:opacity-80" target="_blank" rel="noopener noreferrer">$1</a>'
+    (_match, text, url) => `<a href="${sanitizeUrl(url)}" class="text-primary underline hover:opacity-80" target="_blank" rel="noopener noreferrer">${text}</a>`
   )
 
   // Lists (basic — supports - and *)
@@ -139,7 +162,7 @@ export default async function BlogPostPage({ params }: Params) {
 
   return (
     <article className="mx-auto max-w-3xl px-4 py-8 md:py-12">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }} />
 
       {/* Breadcrumbs */}
       <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-xs text-muted-foreground mb-8">

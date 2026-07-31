@@ -1,3 +1,4 @@
+import { safeJsonLd } from '@/lib/jsonld'
 import { db } from '@/lib/db'
 import { Hero } from '@/components/storefront/hero'
 import { ProductGrid } from '@/components/storefront/product-grid'
@@ -53,7 +54,7 @@ export default async function StoreHomePage({ params }: Params) {
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }} />
       <Hero />
       <CategoryGrid storeId={store.id} storeSlug={store.slug} />
       <ProductGrid ssrProducts={JSON.parse(JSON.stringify(products))} ssrStoreId={store.id} />

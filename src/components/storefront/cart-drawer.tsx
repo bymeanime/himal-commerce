@@ -10,10 +10,20 @@ import {
   SheetDescription,
   SheetFooter,
 } from '@/components/ui/sheet'
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { formatNPR } from '@/lib/nepal'
-import { Minus, Plus, Trash2, ShoppingBag, ShoppingCart } from 'lucide-react'
+import { Minus, Plus, Trash2, ShoppingBag, ShoppingCart, AlertTriangle } from 'lucide-react'
 
 export function CartDrawer() {
   const items = useCart((s) => s.items)
@@ -23,6 +33,10 @@ export function CartDrawer() {
   const remove = useCart((s) => s.remove)
   const subtotal = useCart((s) => s.subtotal())
   const setCheckoutOpen = useUI((s) => s.setCheckoutOpen)
+  // CUST-015 fix: pending store-switch confirmation
+  const pendingSwitch = useCart((s) => s.pendingSwitch)
+  const confirmSwitch = useCart((s) => s.confirmSwitch)
+  const cancelSwitch = useCart((s) => s.cancelSwitch)
 
   const handleCheckout = () => {
     close()
@@ -30,21 +44,22 @@ export function CartDrawer() {
   }
 
   return (
-    <Sheet open={isOpen} onOpenChange={(o) => !o && close()}>
-      <SheetContent side="right" className="w-full sm:max-w-md flex flex-col">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
-            <ShoppingBag className="h-5 w-5" />
-            Your cart
-          </SheetTitle>
-          <SheetDescription>
-            {items.length === 0
-              ? 'Your cart is empty.'
-              : `${items.length} ${items.length === 1 ? 'item' : 'items'} ready for checkout.`}
-          </SheetDescription>
-        </SheetHeader>
+    <>
+      <Sheet open={isOpen} onOpenChange={(o) => !o && close()}>
+        <SheetContent side="right" className="w-full sm:max-w-md flex flex-col">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <ShoppingBag className="h-5 w-5" />
+              Your cart
+            </SheetTitle>
+            <SheetDescription>
+              {items.length === 0
+                ? 'Your cart is empty.'
+                : `${items.length} ${items.length === 1 ? 'item' : 'items'} ready for checkout.`}
+            </SheetDescription>
+          </SheetHeader>
 
-        {items.length === 0 ? (
+          {items.length === 0 ? (
           <div className="flex-1 grid place-items-center py-20">
             <div className="text-center space-y-3">
               <div className="mx-auto h-16 w-16 rounded-full bg-muted grid place-items-center">
@@ -125,5 +140,32 @@ export function CartDrawer() {
         )}
       </SheetContent>
     </Sheet>
+
+      {/* CUST-015 fix: confirm before wiping cart on store switch */}
+      <AlertDialog open={!!pendingSwitch} onOpenChange={(o) => !o && cancelSwitch()}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Switch to a new store?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Your cart has items from another store. Adding <strong>{pendingSwitch?.product.title}</strong> will
+              remove all current cart items. Each store ships separately, so you can&apos;t mix products from
+              different stores in one order. Do you want to clear the cart and add this item?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={cancelSwitch}>Keep my cart</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmSwitch}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Clear cart & add item
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }

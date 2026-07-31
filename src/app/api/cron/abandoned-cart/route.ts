@@ -14,10 +14,19 @@ import { db } from '@/lib/db'
 // requires SPARROW_SMS_TOKEN env var (CEO panel — Phase 2).
 
 export async function GET(req: NextRequest) {
-  // Verify cron secret to prevent abuse
+  // Verify cron secret — FAIL CLOSED (QA-009 fix).
+  // Previously: if CRON_SECRET was unset, the check was skipped entirely,
+  // allowing anyone to trigger the cron. Now: if unset, return 500 with a
+  // clear message; if set but mismatched, return 401.
   const authHeader = req.headers.get('authorization')
-  const expected = `Bearer ${process.env.CRON_SECRET}`
-  if (process.env.CRON_SECRET && authHeader !== expected) {
+  const expected = process.env.CRON_SECRET
+  if (!expected) {
+    return NextResponse.json(
+      { error: 'CRON_SECRET env var is not set — cron endpoint is disabled. Set it in Vercel env vars and configure vercel.json crons to send it as a Bearer token.' },
+      { status: 500 }
+    )
+  }
+  if (authHeader !== `Bearer ${expected}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

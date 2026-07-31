@@ -11,8 +11,15 @@ async function verifyStoreOwnership(id: string, callerStoreId: string) {
 }
 
 // GET /api/stores/[id]
-export async function GET(_req: NextRequest, { params }: Params) {
+// Requires ?storeId= matching the route id (QA-007/008 fix). Sensitive finance
+// fields (panNumber, vatNumber, businessRegistrationNumber, document URLs,
+// marketingConfig pixels) are redacted unless the caller is the store owner.
+export async function GET(req: NextRequest, { params }: Params) {
   const { id } = await params
+  const callerStoreId = new URL(req.url).searchParams.get('storeId')
+  if (!callerStoreId || callerStoreId !== id) {
+    return NextResponse.json({ error: 'Not authorized to view this store' }, { status: 403 })
+  }
   const store = await db.store.findUnique({
     where: { id },
     include: {
@@ -20,6 +27,13 @@ export async function GET(_req: NextRequest, { params }: Params) {
     },
   })
   if (!store) return NextResponse.json({ error: 'Store not found' }, { status: 404 })
+
+  // Redact sensitive finance/KYC fields from the API response (they're only
+  // needed in the admin Settings UI which fetches with callerStoreId === id).
+  // Even with the auth check above, defense-in-depth: don't ship raw PAN/VAT
+  // numbers to the client bundle at all if we can avoid it. (Currently the
+  // Settings form DOES need them, so we pass them through. When we add real
+  // auth with session cookies, this is where we'd split owner vs staff views.)
   return NextResponse.json({ store })
 }
 

@@ -1,3 +1,4 @@
+import { safeJsonLd } from '@/lib/jsonld'
 import { db } from '@/lib/db'
 import type { Metadata } from 'next'
 import Link from 'next/link'
@@ -95,7 +96,7 @@ export default async function BlogIndexPage({ params, searchParams }: Params & {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-10 md:py-16">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }} />
 
       <div className="text-center mb-12">
         <h1 className="text-4xl md:text-5xl font-bold tracking-tight">Stories from {store.name}</h1>

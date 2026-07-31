@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// GET /api/stats?storeId=xxx  → per-store dashboard
-// GET /api/stats?platform=true → super-admin cross-store dashboard
+// GET /api/stats?storeId=xxx  → per-store dashboard (caller must own storeId)
+// GET /api/stats?platform=true&platformKey=xxx → super-admin cross-store dashboard
+//
+// SECURITY (QA-006 fix): platform mode requires a `platformKey` query param
+// matching the `PLATFORM_ADMIN_KEY` env var. If the env var is unset, the
+// endpoint returns 403 — fail-closed — so that platform-wide revenue figures
+// are never exposed on a public deployment by default.
+//
+// To enable the platform dashboard: set `PLATFORM_ADMIN_KEY` in Vercel env
+// vars, then pass the same value as `?platformKey=` from the Platform
+// component (read via `NEXT_PUBLIC_PLATFORM_ADMIN_KEY`).
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const storeId = searchParams.get('storeId')
@@ -10,6 +19,21 @@ export async function GET(req: NextRequest) {
 
   // ====== Platform super-admin stats ======
   if (platform) {
+    const platformKey = searchParams.get('platformKey')
+    const expectedKey = process.env.PLATFORM_ADMIN_KEY
+    if (!expectedKey || platformKey !== expectedKey) {
+      return NextResponse.json(
+        {
+          error: {
+            code: 'PLATFORM_AUTH_REQUIRED',
+            message: expectedKey
+              ? 'Invalid or missing platformKey. Platform stats require authentication.'
+              : 'Platform stats are disabled. Set PLATFORM_ADMIN_KEY env var and pass ?platformKey= to enable.',
+          },
+        },
+        { status: 403 }
+      )
+    }
     const [totalStores, totalOrders, totalProducts, totalCustomers, totalRevenueAgg, stores] = await Promise.all([
       db.store.count(),
       db.order.count(),
@@ -73,6 +97,11 @@ export async function GET(req: NextRequest) {
     recentOrders,
     topProductsRaw,
     last7DaysOrders,
+    // STAFF-001: triage queue counts — surface orders needing staff action
+    onHoldOrders,
+    unverifiedCodOrders,
+    processingOrders,
+    lowStockCount,
   ] = await Promise.all([
     db.order.count({ where: { storeId } }),
     db.product.count({ where: { storeId } }),
@@ -96,6 +125,11 @@ export async function GET(req: NextRequest) {
       where: { storeId, createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } },
       select: { total: true, createdAt: true, status: true, paymentStatus: true },
     }),
+    // STAFF-001: triage counts
+    db.order.count({ where: { storeId, status: 'on_hold' } }),
+    db.order.count({ where: { storeId, paymentMethod: 'cod', codVerified: false, status: { in: ['pending', 'on_hold'] } } }),
+    db.order.count({ where: { storeId, status: 'processing' } }),
+    db.product.count({ where: { storeId, status: 'published', inventory: { lte: 5 } } }),
   ])
 
   const totalRevenue = await db.order.aggregate({
@@ -131,6 +165,13 @@ export async function GET(req: NextRequest) {
       pendingOrders,
       deliveredOrders,
       revenue: totalRevenue._sum.total || 0,
+    },
+    // STAFF-001: triage queue — counts of orders needing staff action
+    triage: {
+      onHold: onHoldOrders,
+      unverifiedCod: unverifiedCodOrders,
+      processing: processingOrders,
+      lowStock: lowStockCount,
     },
     recentOrders,
     topProducts: topProductsRaw.map((p) => ({

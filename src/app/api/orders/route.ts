@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 
-// GET /api/orders?storeId=xxx&status=
+// GET /api/orders?storeId=xxx&status=&paymentMethod=
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const storeId = searchParams.get('storeId')
   const status = searchParams.get('status')
+  const paymentMethod = searchParams.get('paymentMethod')
 
   if (!storeId) {
     return NextResponse.json({ error: 'storeId is required' }, { status: 400 })
@@ -13,6 +14,8 @@ export async function GET(req: NextRequest) {
 
   const where: Record<string, unknown> = { storeId }
   if (status && status !== 'all') where.status = status
+  // STAFF-003: payment-method filter for COD workflow
+  if (paymentMethod && paymentMethod !== 'all') where.paymentMethod = paymentMethod
 
   const orders = await db.order.findMany({
     where,

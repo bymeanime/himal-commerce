@@ -30,16 +30,19 @@ async function verifyOrderOwnership(orderId: string, storeId: string) {
 }
 
 // GET /api/orders/[id]?storeId=...
+// storeId is REQUIRED (QA-001 fix) — prevents cross-tenant IDOR.
+// Without it, any caller could enumerate orders by id.
 export async function GET(req: NextRequest, { params }: Params) {
   const { id } = await params
   const storeId = new URL(req.url).searchParams.get('storeId')
-  if (storeId) {
-    const owns = await verifyOrderOwnership(id, storeId)
-    if (!owns) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+  if (!storeId) {
+    return NextResponse.json({ error: 'storeId is required for authorization' }, { status: 400 })
   }
+  const owns = await verifyOrderOwnership(id, storeId)
+  if (!owns) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
   const order = await db.order.findUnique({
     where: { id },
-    include: { items: true, customer: true, store: true, events: { orderBy: { createdAt: 'desc' }, take: 20 } },
+    include: { items: true, customer: true, store: { select: { id: true, name: true, slug: true } }, events: { orderBy: { createdAt: 'desc' }, take: 20 } },
   })
   if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
   return NextResponse.json({ order })
@@ -93,7 +96,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (body.internalNotes !== undefined) data.internalNotes = body.internalNotes
   if (body.courier !== undefined) data.courier = body.courier
   if (body.trackingNumber !== undefined) data.trackingNumber = body.trackingNumber
+  if (body.courierShipmentId !== undefined) data.courierShipmentId = body.courierShipmentId
   if (body.heldReason !== undefined) data.heldReason = body.heldReason
+  // COD verification workflow (STAFF-008) — staff can mark COD verified + method
+  if (body.codVerified !== undefined) data.codVerified = Boolean(body.codVerified)
+  if (body.codVerificationMethod !== undefined) data.codVerificationMethod = body.codVerificationMethod
+  if (body.verificationStatus !== undefined) data.verificationStatus = body.verificationStatus
+  // Dispute tracking (CEO panel)
+  if (body.disputeStatus !== undefined) data.disputeStatus = body.disputeStatus
+  if (body.disputeReason !== undefined) data.disputeReason = body.disputeReason
 
   // Status → timestamp auto-set
   if (body.status === 'shipped' && !current.shippedAt) data.shippedAt = new Date()
@@ -116,6 +127,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (body.fulfillment && body.fulfillment !== current.fulfillment) changes.push(`fulfillment: ${current.fulfillment} → ${body.fulfillment}`)
   if (body.trackingNumber && body.trackingNumber !== current.trackingNumber) changes.push(`tracking: ${body.trackingNumber}`)
   if (body.internalNotes !== undefined) changes.push('internal notes updated')
+  if (body.codVerified !== undefined && body.codVerified !== current.codVerified) changes.push(`COD verified: ${body.codVerified ? 'yes' : 'no'}`)
+  if (body.verificationStatus && body.verificationStatus !== current.verificationStatus) changes.push(`verification: ${current.verificationStatus} → ${body.verificationStatus}`)
+  if (body.courier && body.courier !== current.courier) changes.push(`courier: ${body.courier}`)
 
   if (changes.length) {
     await db.orderEvent.create({

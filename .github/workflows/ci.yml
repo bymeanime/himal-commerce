@@ -46,6 +46,12 @@ jobs:
       - name: Typecheck
         run: bunx tsc --noEmit
 
+      - name: Run tests (TM-1 fix: tests were not running in CI)
+        run: bun run test
+        env:
+          DATABASE_PROVIDER: sqlite
+          DATABASE_URL: file:./ci-check.db
+
       - name: Build
         run: bunx next build
         env:

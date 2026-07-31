@@ -65,7 +65,17 @@ export function Platform() {
 
   const { data, isLoading } = useQuery<PlatformStats>({
     queryKey: ['stats', 'platform'],
-    queryFn: async () => (await fetch('/api/stats?platform=true')).json(),
+    queryFn: async () => {
+      // Pass platformKey if NEXT_PUBLIC_PLATFORM_ADMIN_KEY is configured (QA-006 fix).
+      // When unset, the API returns 403 and we show the per-store list only.
+      const key = process.env.NEXT_PUBLIC_PLATFORM_ADMIN_KEY
+      const url = key
+        ? `/api/stats?platform=true&platformKey=${encodeURIComponent(key)}`
+        : '/api/stats?platform=true'
+      const res = await fetch(url)
+      if (!res.ok) return null
+      return res.json()
+    },
   })
 
   return (

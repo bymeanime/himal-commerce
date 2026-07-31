@@ -25,8 +25,9 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Checkbox } from '@/components/ui/checkbox'
 import { formatNPR, NEPAL_PROVINCES, calcShippingCost, getProvince, PAYMENT_METHODS } from '@/lib/nepal'
-import { Truck, Wallet, Banknote, CheckCircle2, ArrowLeft, ArrowRight, MapPin, User, CreditCard } from 'lucide-react'
+import { Truck, Wallet, Banknote, CheckCircle2, ArrowLeft, ArrowRight, MapPin, User, CreditCard, AlertCircle, Info } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { getReferrer, getUTM } from '@/lib/analytics-client'
@@ -46,7 +47,7 @@ export function CheckoutModal() {
   const setOpen = useUI((s) => s.setCheckoutOpen)
   const lastOrderNumber = useUI((s) => s.lastOrderNumber)
   const setLastOrderNumber = useUI((s) => s.setLastOrderNumber)
-  const { storeId } = useCurrentStore()
+  const { storeId, store } = useCurrentStore()
 
   const [step, setStep] = useState<Step>('shipping')
   const [submitting, setSubmitting] = useState(false)
@@ -68,14 +69,22 @@ export function CheckoutModal() {
     address: '',
     city: '',
     district: '',
+    ward: '',
+    municipality: '',
+    postalCode: '',
     paymentMethod: 'cod' as 'cod' | 'esewa' | 'khalti',
     notes: '',
   })
+  // CUST-012 fix: terms + age-gate consent. Sent as ageConfirmation to the
+  // server, which re-verifies per-product. Required to place an order.
+  const [agreedToTerms, setAgreedToTerms] = useState(false)
 
   const shippingCost = useMemo(() => {
     if (appliedCoupon?.freeShipping) return 0
-    return calcShippingCost(form.district)
-  }, [form.district, appliedCoupon])
+    // CUST-019 fix: pass store.freeShippingThreshold so the client-side preview
+    // matches the server's calculation.
+    return calcShippingCost(form.district, subtotal, store?.freeShippingThreshold ?? null)
+  }, [form.district, appliedCoupon, subtotal, store])
   const discountAmount = appliedCoupon?.discountAmount ?? 0
   const total = Math.max(0, subtotal + shippingCost - discountAmount)
   const province = form.district ? getProvince(form.district) : null
@@ -116,9 +125,11 @@ export function CheckoutModal() {
     setCouponError('')
   }
 
+  // CUST-011 fix: use the same Nepal mobile regex as the server.
+  const phoneValid = /^9[678]\d{8}$/.test(form.phone.replace(/[\s\-()]/g, '').replace(/^\+977/, ''))
   const canProceedShipping =
     form.name.trim() &&
-    form.phone.trim().length >= 10 &&
+    phoneValid &&
     form.address.trim() &&
     form.city.trim() &&
     form.district
@@ -131,9 +142,13 @@ export function CheckoutModal() {
       address: '',
       city: '',
       district: '',
+      ward: '',
+      municipality: '',
+      postalCode: '',
       paymentMethod: 'cod',
       notes: '',
     })
+    setAgreedToTerms(false)
     setStep('shipping')
   }
 
@@ -159,8 +174,13 @@ export function CheckoutModal() {
           shippingAddress: form.address,
           shippingCity: form.city,
           shippingDistrict: form.district,
+          shippingWard: form.ward || undefined,
+          shippingMunicipality: form.municipality || undefined,
+          shippingPostalCode: form.postalCode || undefined,
           paymentMethod: form.paymentMethod,
           notes: form.notes || undefined,
+          // CUST-012 fix: send ageConfirmation so age-restricted orders don't silently fail
+          ageConfirmation: agreedToTerms,
           couponCode: appliedCoupon?.code || undefined,
           // Affiliate attribution (read from himal-ref cookie) + UTM (Marketing panel)
           referrer: getReferrer() || undefined,
@@ -257,7 +277,11 @@ export function CheckoutModal() {
                   onChange={(e) => setForm({ ...form, phone: e.target.value })}
                   placeholder="98XXXXXXXX"
                   inputMode="numeric"
+                  className={form.phone && !phoneValid ? 'border-destructive' : ''}
                 />
+                {form.phone && !phoneValid && (
+                  <p className="text-xs text-destructive">Enter a valid Nepal mobile (98XXXXXXXX, 97XXXXXXXX, or 96XXXXXXXX).</p>
+                )}
               </div>
             </div>
             <div className="space-y-1.5">
@@ -325,6 +349,39 @@ export function CheckoutModal() {
               </div>
             </div>
 
+            {/* CUST-010 fix: ward/municipality/postal — couriers require these for last-mile delivery */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="ward">Ward</Label>
+                <Input
+                  id="ward"
+                  value={form.ward}
+                  onChange={(e) => setForm({ ...form, ward: e.target.value })}
+                  placeholder="e.g. 5"
+                  inputMode="numeric"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="municipality">Municipality / Rural Municipality</Label>
+                <Input
+                  id="municipality"
+                  value={form.municipality}
+                  onChange={(e) => setForm({ ...form, municipality: e.target.value })}
+                  placeholder="e.g. Kirtipur"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="postalCode">Postal code</Label>
+                <Input
+                  id="postalCode"
+                  value={form.postalCode}
+                  onChange={(e) => setForm({ ...form, postalCode: e.target.value })}
+                  placeholder="e.g. 44600"
+                  inputMode="numeric"
+                />
+              </div>
+            </div>
+
             {province && (
               <div className="rounded-lg bg-muted/60 px-3 py-2 text-xs flex items-center justify-between">
                 <span className="text-muted-foreground">
@@ -365,30 +422,46 @@ export function CheckoutModal() {
             >
               {PAYMENT_METHODS.map((pm) => {
                 const Icon = PAYMENT_ICONS[pm.icon] ?? Wallet
+                // CUST-008 fix: digital payment gateways (eSewa/Khalti) are not
+                // yet wired. Show them as disabled with a "Coming soon" badge
+                // so customers don't select them, get a pending order, and think
+                // they've paid. COD remains the only fully-functional method.
+                const isDigital = pm.id === 'esewa' || pm.id === 'khalti'
+                const disabled = isDigital // toggle to false once gateway is wired
                 return (
                   <label
                     key={pm.id}
                     htmlFor={`pm-${pm.id}`}
                     className={cn(
-                      'flex items-start gap-3 rounded-xl border-2 p-4 cursor-pointer transition-all',
-                      form.paymentMethod === pm.id
+                      'flex items-start gap-3 rounded-xl border-2 p-4 transition-all',
+                      disabled
+                        ? 'opacity-60 cursor-not-allowed border-border bg-muted/30'
+                        : 'cursor-pointer',
+                      !disabled && form.paymentMethod === pm.id
                         ? 'border-primary bg-primary/5'
-                        : 'border-border hover:border-primary/40'
+                        : !disabled && 'border-border hover:border-primary/40'
                     )}
                   >
-                    <RadioGroupItem value={pm.id} id={`pm-${pm.id}`} className="mt-1" />
+                    <RadioGroupItem value={pm.id} id={`pm-${pm.id}`} className="mt-1" disabled={disabled} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <Icon className="h-4 w-4 text-primary" />
                         <span className="font-semibold text-sm">{pm.name}</span>
                         <span className="text-xs text-muted-foreground">({pm.nepali})</span>
-                        {pm.popular && (
+                        {pm.popular && !disabled && (
                           <Badge variant="secondary" className="bg-accent text-accent-foreground text-[10px]">
                             Popular
                           </Badge>
                         )}
+                        {disabled && (
+                          <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-700 bg-amber-50">
+                            Coming soon
+                          </Badge>
+                        )}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">{pm.description}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {disabled ? 'Online gateway integration pending. Please use Cash on Delivery for now.' : pm.description}
+                      </p>
                     </div>
                   </label>
                 )
@@ -556,13 +629,36 @@ export function CheckoutModal() {
               </div>
             </div>
 
+            {/* CUST-012 fix: terms + age-gate consent */}
+            <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+              <div className="flex items-start gap-2.5">
+                <Checkbox
+                  id="agree-terms"
+                  checked={agreedToTerms}
+                  onCheckedChange={(v) => setAgreedToTerms(v === true)}
+                  className="mt-0.5"
+                />
+                <Label htmlFor="agree-terms" className="text-xs leading-relaxed cursor-pointer">
+                  I confirm the shipping details above are correct, I agree to the store&apos;s{' '}
+                  <a href="/refund-policy" target="_blank" className="underline text-primary">refund</a> and{' '}
+                  <a href="/shipping-policy" target="_blank" className="underline text-primary">shipping</a> policies,
+                  and I am 18+ if this order contains age-restricted items.
+                </Label>
+              </div>
+              {!agreedToTerms && (
+                <p className="text-[11px] text-muted-foreground flex items-center gap-1 pl-7">
+                  <Info className="h-3 w-3" /> Please check the box to place your order.
+                </p>
+              )}
+            </div>
+
             <div className="flex justify-between pt-2">
               <Button variant="ghost" onClick={() => setStep('payment')} className="h-11">
                 <ArrowLeft className="h-4 w-4 mr-1" /> Back
               </Button>
               <Button
                 onClick={placeOrder}
-                disabled={submitting}
+                disabled={submitting || !agreedToTerms}
                 size="lg"
                 className="h-11 px-6"
               >

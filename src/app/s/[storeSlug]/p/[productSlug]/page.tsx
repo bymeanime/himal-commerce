@@ -1,3 +1,4 @@
+import { safeJsonLd } from '@/lib/jsonld'
 import { db } from '@/lib/db'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
@@ -107,7 +108,7 @@ export default async function ProductPage({ params }: Params) {
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }} />
       <SsrProductDetail product={productData} />
     </>
   )

@@ -16,8 +16,16 @@ export const KATHMANDU_VALLEY = ['Kathmandu', 'Lalitpur', 'Bhaktapur']
 
 // Shipping cost in paisa (1 NPR = 100 paisa)
 // Inside KTM valley: Rs 100, outside valley but within Nepal: Rs 200-350 based on zone
-export function calcShippingCost(district: string): number {
+//
+// CUST-019 fix: if `freeShippingThreshold` is set AND the cart subtotal (paisa)
+// is at or above the threshold, shipping is free. Previously the header
+// announced "Free shipping over Rs 5,000" but the calc ignored the threshold.
+export function calcShippingCost(district: string, subtotalPaisa?: number, freeShippingThreshold?: number | null): number {
   if (!district) return 0
+  // Free shipping override — takes precedence over the district-based rate
+  if (freeShippingThreshold && subtotalPaisa !== undefined && subtotalPaisa >= freeShippingThreshold) {
+    return 0
+  }
   if (KATHMANDU_VALLEY.includes(district)) return 100 * 100 // Rs 100
   // Far-west and Karnali are more remote
   const farWest = ['Sudurpashchim'].includes(getProvince(district) || '')

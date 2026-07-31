@@ -46,6 +46,13 @@ type Stats = {
     deliveredOrders: number
     revenue: number
   }
+  // STAFF-001: triage queue counts
+  triage?: {
+    onHold: number
+    unverifiedCod: number
+    processing: number
+    lowStock: number
+  }
   recentOrders: Array<{
     id: string
     orderNumber: string
@@ -234,6 +241,64 @@ export function AdminDashboard() {
                   <ArrowRight className="h-3 w-3 ml-auto" />
                 </button>
               ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* STAFF-001: Order triage queue — 4 clickable cards surfacing orders needing staff action.
+          Clicking a card navigates to the Orders page with the relevant filter applied. */}
+      {data?.triage && (data.triage.unverifiedCod > 0 || data.triage.onHold > 0 || data.triage.processing > 0 || data.triage.lowStock > 0) && (
+        <Card className="border-border/60">
+          <CardContent className="p-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+              Order triage — quick actions
+            </p>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <button
+                onClick={() => setSection('orders')}
+                className="rounded-lg border-2 border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30 p-3 text-left hover:border-amber-400 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <span className="text-2xl font-bold text-amber-700 dark:text-amber-300">{data.triage!.unverifiedCod}</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">COD unverified</p>
+                <p className="text-[10px] text-muted-foreground/70">Click to review →</p>
+              </button>
+              <button
+                onClick={() => setSection('orders')}
+                className="rounded-lg border-2 border-orange-200 dark:border-orange-900 bg-orange-50 dark:bg-orange-950/30 p-3 text-left hover:border-orange-400 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <Clock className="h-4 w-4 text-orange-600" />
+                  <span className="text-2xl font-bold text-orange-700 dark:text-orange-300">{data.triage!.onHold}</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">On hold</p>
+                <p className="text-[10px] text-muted-foreground/70">Click to review →</p>
+              </button>
+              <button
+                onClick={() => setSection('orders')}
+                className="rounded-lg border-2 border-blue-200 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/30 p-3 text-left hover:border-blue-400 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <Package className="h-4 w-4 text-blue-600" />
+                  <span className="text-2xl font-bold text-blue-700 dark:text-blue-300">{data.triage!.processing}</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">Ready to pack</p>
+                <p className="text-[10px] text-muted-foreground/70">Click to review →</p>
+              </button>
+              <button
+                onClick={() => setSection('products')}
+                className="rounded-lg border-2 border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 p-3 text-left hover:border-red-400 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <AlertTriangle className="h-4 w-4 text-red-600" />
+                  <span className="text-2xl font-bold text-red-700 dark:text-red-300">{data.triage!.lowStock}</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">Low on stock</p>
+                <p className="text-[10px] text-muted-foreground/70">Click to restock →</p>
+              </button>
             </div>
           </CardContent>
         </Card>

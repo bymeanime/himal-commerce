@@ -71,7 +71,13 @@ export function StorefrontHeader() {
               <span>All stores</span>
             </button>
             <span className="text-primary-foreground/40">·</span>
-            <span className="truncate">Free shipping inside Kathmandu Valley on orders over रू 5,000</span>
+            <span className="truncate">
+              {/* CUST-019 fix: show the store's actual free-shipping threshold if configured,
+                  otherwise a generic message. Previously hardcoded "Rs 5,000" which could lie. */}
+              {store?.freeShippingThreshold
+                ? `Free shipping on orders over रू ${(store.freeShippingThreshold / 100).toLocaleString('en-IN')}`
+                : 'Authentic Nepali products · Delivered nationwide'}
+            </span>
           </p>
           {store?.supportPhone && (
             <p className="hidden sm:flex items-center gap-1.5 shrink-0">
@@ -105,8 +111,8 @@ export function StorefrontHeader() {
           )}
         </div>
 
-        {/* Desktop nav — main items + categories dropdown */}
-        <nav className="hidden md:flex items-center gap-1">
+        {/* Desktop nav — main items + categories dropdown + search */}
+        <nav className="hidden md:flex items-center gap-1 flex-1 max-w-xl mx-4">
           {navItems.map((item) => (
             <Button
               key={item.id}
@@ -134,6 +140,25 @@ export function StorefrontHeader() {
               </DropdownMenuContent>
             </DropdownMenu>
           )}
+          {/* CUST-001 fix: sticky header search bar — links to the SSR /search page */}
+          {store && (
+            <form
+              action={`/s/${store.slug}/search`}
+              method="GET"
+              className="ml-2 flex-1 max-w-xs"
+            >
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                <input
+                  type="search"
+                  name="q"
+                  placeholder="Search products…"
+                  aria-label="Search products"
+                  className="w-full h-9 pl-8 pr-3 rounded-md border border-border bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                />
+              </div>
+            </form>
+          )}
         </nav>
 
         <div className="flex items-center gap-2">
@@ -159,13 +184,18 @@ export function StorefrontHeader() {
               </Link>
             ))}
           </div>
+          {/* CUST-018 fix: hide "Store admin" button from public storefront.
+              Staff can still access admin via the platform dashboard or by
+              navigating to #store/{id}/admin directly. Showing it to every
+              shopper looked unprofessional and wasted prime header real estate. */}
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="hidden sm:flex"
+            className="hidden sm:flex text-muted-foreground"
             onClick={() => useUI.setState({ view: 'admin' })}
+            title="Staff access only"
           >
-            Store admin
+            Staff
           </Button>
 
           <Button

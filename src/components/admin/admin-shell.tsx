@@ -38,8 +38,10 @@ import {
   Ticket,
   RotateCcw,
   ScrollText,
+  Bell,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { cn } from '@/lib/utils'
 import type { Store } from '@/lib/types'
 
@@ -103,6 +105,8 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
         <div className="p-3 border-t border-border/60 space-y-1">
+          {/* STAFF-016: notification bell — polls for triage counts every 60s */}
+          <NotificationBell storeId={storeId} setSection={setSection} />
           <Button
             variant="outline"
             size="sm"
@@ -269,5 +273,93 @@ function StoreSwitcher({ current, onExit }: { current: Store | null; onExit: () 
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+// STAFF-016: Notification bell — polls /api/stats every 60s for triage counts.
+// Shows a badge with the number of orders needing attention (unverified COD,
+// on-hold, low-stock). Clicking the bell navigates to the dashboard triage card.
+// Also fires a browser Notification if the tab is in the background and a new
+// order arrived since the last poll. The previous order count is stored in a ref
+// so we only fire the notification once per new order.
+function NotificationBell({
+  storeId,
+  setSection,
+}: {
+  storeId: string | null
+  setSection: (s: Section) => void
+}) {
+  const lastOrderCountRef = useRef<number | null>(null)
+
+  const { data } = useQuery<{
+    totals: { orders: number; pendingOrders: number }
+    triage?: { onHold: number; unverifiedCod: number; processing: number; lowStock: number }
+  }>({
+    queryKey: ['stats', 'notif', storeId],
+    queryFn: async () => {
+      if (!storeId) return null
+      const res = await fetch(`/api/stats?storeId=${encodeURIComponent(storeId)}`)
+      if (!res.ok) return null
+      return res.json()
+    },
+    enabled: !!storeId,
+    // STAFF-016: poll every 60s. refetchInterval is paused when the tab is
+    // hidden (TanStack Query does this by default), which is the correct
+    // behavior — no point burning cycles when staff aren't looking.
+    refetchInterval: 60 * 1000,
+    refetchOnWindowFocus: true,
+  })
+
+  const triage = data?.triage
+  const needsAttention = triage
+    ? triage.unverifiedCod + triage.onHold + triage.processing + triage.lowStock
+    : 0
+
+  // Fire a browser notification when a new order arrives while the tab is in the background
+  useEffect(() => {
+    if (!data?.totals?.orders) return
+    if (lastOrderCountRef.current === null) {
+      lastOrderCountRef.current = data.totals.orders
+      return
+    }
+    const prev = lastOrderCountRef.current
+    const now = data.totals.orders
+    if (now > prev && document.visibilityState === 'hidden') {
+      const diff = now - prev
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('New order received', {
+          body: `${diff} new ${diff === 1 ? 'order' : 'orders'} just came in. Tap to review.`,
+          icon: '/favicon.ico',
+        })
+      }
+    }
+    lastOrderCountRef.current = now
+  }, [data?.totals?.orders])
+
+  // Request notification permission on mount (silent if already granted/denied)
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {})
+    }
+  }, [])
+
+  if (!storeId) return null
+
+  return (
+    <button
+      onClick={() => setSection('dashboard')}
+      className="w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent transition-colors relative"
+      aria-label={needsAttention > 0 ? `${needsAttention} items need attention` : 'No new notifications'}
+    >
+      <span className="flex items-center gap-2.5">
+        <Bell className="h-4 w-4" />
+        Notifications
+      </span>
+      {needsAttention > 0 && (
+        <Badge className="bg-red-500 text-white text-[10px] h-5 min-w-5 px-1 rounded-full grid place-items-center animate-pulse">
+          {needsAttention}
+        </Badge>
+      )}
+    </button>
   )
 }

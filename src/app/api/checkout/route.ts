@@ -189,16 +189,20 @@ export async function POST(req: NextRequest) {
     }, { status: 400 })
   }
 
-  // ====== SERVER-SIDE SUBTOTAL ======
-  const subtotal = lineItems.reduce((sum, it) => sum + it.unitPrice * it.quantity, 0)
-  const shippingCost = calcShippingCost(shippingDistrict)
-  const province = getProvince(shippingDistrict) || 'Bagmati'
-
-  // ====== VAT CALCULATION (Accountant panel P0) ======
+  // ====== Fetch store config (needed for VAT, shipping threshold, COD risk) ======
   const store = await db.store.findUnique({ where: { id: storeId } })
   if (!store) {
     return NextResponse.json({ error: 'Store not found' }, { status: 404 })
   }
+
+  // ====== SERVER-SIDE SUBTOTAL ======
+  const subtotal = lineItems.reduce((sum, it) => sum + it.unitPrice * it.quantity, 0)
+  // CUST-019 fix: pass subtotal + freeShippingThreshold so the calc can apply
+  // the store's free-shipping offer (previously ignored despite the header banner).
+  const shippingCost = calcShippingCost(shippingDistrict, subtotal, store.freeShippingThreshold)
+  const province = getProvince(shippingDistrict) || 'Bagmati'
+
+  // ====== VAT CALCULATION (Accountant panel P0) ======
   const taxRate = store.vatRegistered ? store.defaultTaxRate : 0
   const taxInclusive = store.taxInclusiveDisplay
   // VAT-inclusive extraction: taxTotal = round((subtotal + shipping) * rate / (10000 + rate))
@@ -231,6 +235,26 @@ export async function POST(req: NextRequest) {
     }
     if (coupon.maxRedemptions && coupon.usageCount >= coupon.maxRedemptions) {
       return NextResponse.json({ error: { code: 'COUPON_EXHAUSTED', message: 'This coupon has reached its usage limit.' } }, { status: 400 })
+    }
+    // ====== QA-014 fix: per-customer redemption limit ======
+    // Count how many prior orders from this customer (by phone) used this coupon.
+    // If coupon.perCustomerLimit is set and the customer has already hit it, reject.
+    if (coupon.perCustomerLimit) {
+      const customerUsageCount = await db.order.count({
+        where: {
+          storeId,
+          couponId: coupon.id,
+          customerPhone: customerPhone,
+        },
+      })
+      if (customerUsageCount >= coupon.perCustomerLimit) {
+        return NextResponse.json({
+          error: {
+            code: 'COUPON_CUSTOMER_LIMIT_REACHED',
+            message: `This coupon can only be used ${coupon.perCustomerLimit} time(s) per customer. You've already used it ${customerUsageCount} time(s).`,
+          },
+        }, { status: 400 })
+      }
     }
     // Compute discount
     if (coupon.type === 'percent') {

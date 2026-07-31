@@ -20,7 +20,10 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Normalize phone — strip spaces/dashes, keep digits and leading +
+  // Normalize phone — strip spaces/dashes/parens, keep digits and leading +
+  // Then extract the last 10 digits (Nepal mobile numbers are 10 digits without country code)
+  // for matching. This prevents substring enumeration (QA-005) where an attacker
+  // could type "9" and match every Nepal phone number.
   const normalizedPhone = phone.replace(/[\s\-()]/g, '')
   if (!normalizedPhone) {
     return NextResponse.json(
@@ -29,18 +32,23 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Try exact match first, then suffix match (in case the stored phone has a +977 prefix
-  // but the customer typed the local number, or vice versa)
+  // Extract last 10 digits — handles "+977 98XXXXXXXX", "97798XXXXXXXX", "98XXXXXXXX", "098XXXXXXXX"
+  const digitsOnly = normalizedPhone.replace(/\D/g, '')
+  const last10 = digitsOnly.slice(-10)
+  if (last10.length !== 10) {
+    return NextResponse.json(
+      { error: 'Please enter a valid 10-digit Nepal mobile number.' },
+      { status: 400 }
+    )
+  }
+
+  // Match by exact phone OR by phone ending in the same 10 digits (handles +977 prefix variations).
+  // We use a precise endsWith pattern instead of `contains` to prevent partial enumeration.
   const order = await db.order.findFirst({
     where: {
       storeId,
       orderNumber: orderNumber.toUpperCase().trim(),
-      OR: [
-        { customerPhone: normalizedPhone },
-        { customerPhone: { contains: normalizedPhone } },
-        // If the customer typed +977, try matching the last 10 digits
-        { customerPhone: { contains: normalizedPhone.replace(/^\+977/, '') } },
-      ],
+      customerPhone: { endsWith: last10 },
     },
     include: {
       items: true,

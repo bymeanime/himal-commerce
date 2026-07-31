@@ -21,10 +21,23 @@ export async function PATCH(
 
   const data: Record<string, unknown> = {}
   if (status) data.status = status
-  if (rest.code) data.code = String(rest.code).toUpperCase()
+  if (rest.code) {
+    const newCode = String(rest.code).toUpperCase()
+    // QA-022 fix: check uniqueness within store when code changes
+    if (newCode !== coupon.code) {
+      const clash = await db.coupon.findUnique({
+        where: { storeId_code: { storeId, code: newCode } },
+      })
+      if (clash) {
+        return NextResponse.json({ error: 'Coupon code already exists in this store' }, { status: 409 })
+      }
+    }
+    data.code = newCode
+  }
   if (rest.value !== undefined) data.value = parseInt(rest.value, 10)
   if (rest.minSubtotal !== undefined) data.minSubtotal = rest.minSubtotal ? parseInt(rest.minSubtotal, 10) : null
   if (rest.maxRedemptions !== undefined) data.maxRedemptions = rest.maxRedemptions ? parseInt(rest.maxRedemptions, 10) : null
+  if (rest.perCustomerLimit !== undefined) data.perCustomerLimit = rest.perCustomerLimit ? parseInt(rest.perCustomerLimit, 10) : null
   if (rest.startsAt !== undefined) data.startsAt = rest.startsAt ? new Date(rest.startsAt) : null
   if (rest.endsAt !== undefined) data.endsAt = rest.endsAt ? new Date(rest.endsAt) : null
 

@@ -6,10 +6,17 @@ type CartState = {
   items: CartItem[]
   storeId: string | null // The store the cart belongs to
   isOpen: boolean
+  // CUST-015 fix: when a customer tries to add an item from store B while their
+  // cart belongs to store A, we set `pendingSwitch` with the new product details.
+  // The UI shows a confirm dialog; if the customer confirms, `confirmSwitch()`
+  // wipes the cart and adds the new item. If they cancel, `cancelSwitch()` clears it.
+  pendingSwitch: { product: Product; quantity: number; variant: ProductVariant | null } | null
   open: () => void
   close: () => void
   toggle: () => void
   add: (product: Product, quantity?: number, variant?: ProductVariant | null) => void
+  confirmSwitch: () => void
+  cancelSwitch: () => void
   remove: (productId: string, variantId?: string | null) => void
   setQuantity: (productId: string, quantity: number, variantId?: string | null) => void
   clear: () => void
@@ -28,6 +35,7 @@ export const useCart = create<CartState>()(
       items: [],
       storeId: null,
       isOpen: false,
+      pendingSwitch: null,
       open: () => set({ isOpen: true }),
       close: () => set({ isOpen: false }),
       toggle: () => set((s) => ({ isOpen: !s.isOpen })),
@@ -36,23 +44,12 @@ export const useCart = create<CartState>()(
         const variantTitle = variant?.title ?? null
         const linePrice = variant?.price ?? product.price
 
-        // If cart belongs to a different store, start fresh
+        // CUST-015 fix: if cart belongs to a different store, DON'T silently wipe.
+        // Stash the new product in `pendingSwitch`; the UI shows a confirm dialog.
         if (get().storeId && get().storeId !== product.storeId) {
           set({
-            items: [
-              {
-                productId: product.id,
-                variantId,
-                storeId: product.storeId,
-                title: product.title,
-                variantTitle,
-                thumbnail: product.thumbnail,
-                price: linePrice,
-                quantity,
-              },
-            ],
-            storeId: product.storeId,
-            isOpen: true,
+            pendingSwitch: { product, quantity, variant },
+            isOpen: true, // open the drawer so the dialog is visible
           })
           return
         }
@@ -87,6 +84,33 @@ export const useCart = create<CartState>()(
           })
         }
       },
+      confirmSwitch: () => {
+        // Customer confirmed — wipe old cart, add the pending item
+        const pending = get().pendingSwitch
+        if (!pending) return
+        const { product, quantity, variant } = pending
+        const variantId = variant?.id ?? null
+        const variantTitle = variant?.title ?? null
+        const linePrice = variant?.price ?? product.price
+        set({
+          items: [
+            {
+              productId: product.id,
+              variantId,
+              storeId: product.storeId,
+              title: product.title,
+              variantTitle,
+              thumbnail: product.thumbnail,
+              price: linePrice,
+              quantity,
+            },
+          ],
+          storeId: product.storeId,
+          pendingSwitch: null,
+          isOpen: true,
+        })
+      },
+      cancelSwitch: () => set({ pendingSwitch: null, isOpen: false }),
       remove: (productId, variantId = null) => {
         const items = get().items.filter((i) => !lineMatch(i, productId, variantId))
         set({ items, storeId: items.length === 0 ? null : get().storeId })

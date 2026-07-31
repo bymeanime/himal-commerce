@@ -12,7 +12,8 @@ export function useCurrentStore() {
     queryKey: ['store', storeId],
     queryFn: async () => {
       if (!storeId) return { store: null }
-      const res = await fetch(`/api/stores/${storeId}`)
+      // QA-007/008 fix: GET /api/stores/[id] requires ?storeId= matching the route id.
+      const res = await fetch(`/api/stores/${storeId}?storeId=${encodeURIComponent(storeId)}`)
       if (!res.ok) return { store: null }
       return res.json()
     },

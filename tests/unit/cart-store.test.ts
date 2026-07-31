@@ -116,15 +116,50 @@ describe('cart-store', () => {
     expect(s.count()).toBe(2)
   })
 
-  it('clears the cart when switching stores', () => {
+  it('clears the cart when switching stores (after confirmation)', () => {
+    // CUST-015 fix: adding an item from a different store no longer silently
+    // wipes the cart. Instead it stashes the new product in `pendingSwitch`
+    // and the UI shows a confirm dialog. Only after `confirmSwitch()` does the
+    // cart get wiped and the new item added.
     useCart.getState().add(product, 3)
     expect(useCart.getState().storeId).toBe('s1')
-    // Adding a product from a different store should reset
-    useCart.getState().add({ ...product, storeId: 's2', id: 'p2' }, 1)
-    const s = useCart.getState()
+
+    // Adding a product from a different store sets pendingSwitch (does NOT wipe yet)
+    const newProduct = { ...product, storeId: 's2', id: 'p2' }
+    useCart.getState().add(newProduct, 1)
+
+    // Cart still has the old items
+    let s = useCart.getState()
+    expect(s.items).toHaveLength(1)
+    expect(s.items[0].productId).toBe('p1')
+    expect(s.storeId).toBe('s1')
+    // pendingSwitch is set with the new product
+    expect(s.pendingSwitch).not.toBeNull()
+    expect(s.pendingSwitch?.product.id).toBe('p2')
+
+    // Customer confirms the switch — NOW the cart wipes and adds the new item
+    useCart.getState().confirmSwitch()
+    s = useCart.getState()
     expect(s.items).toHaveLength(1)
     expect(s.items[0].productId).toBe('p2')
     expect(s.storeId).toBe('s2')
+    expect(s.pendingSwitch).toBeNull()
+  })
+
+  it('keeps the cart intact when customer cancels the store switch', () => {
+    // CUST-015 fix: if the customer clicks "Keep my cart", pendingSwitch is
+    // cleared and the original cart is preserved unchanged.
+    useCart.getState().add(product, 2)
+    expect(useCart.getState().storeId).toBe('s1')
+
+    useCart.getState().add({ ...product, storeId: 's2', id: 'p2' }, 1)
+    useCart.getState().cancelSwitch()
+
+    const s = useCart.getState()
+    expect(s.items).toHaveLength(1)
+    expect(s.items[0].productId).toBe('p1')
+    expect(s.storeId).toBe('s1')
+    expect(s.pendingSwitch).toBeNull()
   })
 
   it('removes a specific line', () => {

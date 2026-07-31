@@ -77,6 +77,9 @@ export function AdminOrders() {
   const qc = useQueryClient()
   const { storeId } = useCurrentStore()
   const [statusFilter, setStatusFilter] = useState('all')
+  // STAFF-003 fix: payment-method filter — critical for COD workflow
+  // (staff need to see "all COD orders needing verification" in one click)
+  const [paymentFilter, setPaymentFilter] = useState('all')
   const [selected, setSelected] = useState<Order | null>(null)
   const [internalNote, setInternalNote] = useState('')
   const [refundAmount, setRefundAmount] = useState('')
@@ -86,10 +89,11 @@ export function AdminOrders() {
   const [courier, setCourier] = useState('')
 
   const { data, isLoading } = useQuery<{ orders: Order[] }>({
-    queryKey: ['orders', storeId, statusFilter],
+    queryKey: ['orders', storeId, statusFilter, paymentFilter],
     queryFn: async () => {
       const params = new URLSearchParams({ storeId: storeId! })
       if (statusFilter !== 'all') params.set('status', statusFilter)
+      if (paymentFilter !== 'all') params.set('paymentMethod', paymentFilter)
       const res = await fetch(`/api/orders?${params}`)
       return res.json()
     },
@@ -107,11 +111,11 @@ export function AdminOrders() {
   })
 
   const updateMut = useMutation({
-    mutationFn: async ({ id, ...patch }: { id: string; status?: string; paymentStatus?: string; internalNotes?: string; trackingNumber?: string; courier?: string }) => {
+    mutationFn: async ({ id, ...patch }: { id: string; status?: string; paymentStatus?: string; internalNotes?: string; trackingNumber?: string; courier?: string; codVerified?: boolean; codVerificationMethod?: string; verificationStatus?: string; heldReason?: string; disputeStatus?: string; disputeReason?: string }) => {
       const res = await fetch(`/api/orders/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch),
+        body: JSON.stringify({ ...patch, storeId }),
       })
       if (!res.ok) throw new Error('Failed')
       return res.json()
@@ -174,7 +178,7 @@ export function AdminOrders() {
         <div className="flex items-center gap-2">
           {storeId && <ExportCSVButton endpoint="orders" storeId={storeId} />}
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-40">
+            <SelectTrigger className="w-36">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -187,6 +191,18 @@ export function AdminOrders() {
               <SelectItem value="cancelled">Cancelled</SelectItem>
               <SelectItem value="returned">Returned</SelectItem>
               <SelectItem value="refunded">Refunded</SelectItem>
+            </SelectContent>
+          </Select>
+          {/* STAFF-003: payment-method filter */}
+          <Select value={paymentFilter} onValueChange={setPaymentFilter}>
+            <SelectTrigger className="w-36">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All payments</SelectItem>
+              <SelectItem value="cod">Cash on Delivery</SelectItem>
+              <SelectItem value="esewa">eSewa</SelectItem>
+              <SelectItem value="khalti">Khalti</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -553,6 +569,116 @@ export function AdminOrders() {
                         <Truck className="h-3.5 w-3.5 mr-1" /> Save tracking info
                       </Button>
                     </div>
+
+                    {/* STAFF-008 fix: COD verification workflow — wires the
+                        previously-orphaned codVerified / verificationStatus
+                        / codVerificationMethod fields into the admin UI. */}
+                    {selected.paymentMethod === 'cod' && (
+                      <div className="rounded-lg border-2 border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30 p-3 space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                          <AlertCircle className="h-3.5 w-3.5" /> COD Verification
+                        </p>
+                        {selected.total > 500000 && (
+                          <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                            High-value order (over रू 5,000). Verify customer by phone before shipping.
+                          </p>
+                        )}
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="text-xs">
+                            <span className="text-muted-foreground">Status: </span>
+                            <Badge
+                              variant="outline"
+                              className={
+                                selected.codVerified
+                                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                  : 'bg-amber-100 text-amber-800 border-amber-300'
+                              }
+                            >
+                              {selected.codVerified ? '✓ Verified' : 'Unverified'}
+                            </Badge>
+                            {selected.codVerificationMethod && (
+                              <span className="text-muted-foreground ml-2">
+                                via {selected.codVerificationMethod}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {!selected.codVerified && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="default"
+                                className="h-7 text-xs"
+                                onClick={() => {
+                                  updateMut.mutate({
+                                    id: selected.id,
+                                    codVerified: true,
+                                    codVerificationMethod: 'phone_call',
+                                    verificationStatus: 'otp_verified',
+                                    status: selected.status === 'on_hold' ? 'pending' : undefined,
+                                  })
+                                }}
+                                disabled={updateMut.isPending}
+                              >
+                                <Phone className="h-3 w-3 mr-1" /> Mark verified (phone call)
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs"
+                                onClick={() => {
+                                  updateMut.mutate({
+                                    id: selected.id,
+                                    codVerified: true,
+                                    codVerificationMethod: 'admin_approved',
+                                    verificationStatus: 'admin_approved',
+                                    status: selected.status === 'on_hold' ? 'pending' : undefined,
+                                  })
+                                }}
+                                disabled={updateMut.isPending}
+                              >
+                                Admin approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                className="h-7 text-xs"
+                                onClick={() => {
+                                  updateMut.mutate({
+                                    id: selected.id,
+                                    verificationStatus: 'rejected',
+                                    status: 'cancelled',
+                                    heldReason: 'COD verification failed — order cancelled',
+                                  })
+                                }}
+                                disabled={updateMut.isPending}
+                              >
+                                Reject & cancel
+                              </Button>
+                            </>
+                          )}
+                          {selected.codVerified && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              onClick={() => {
+                                updateMut.mutate({
+                                  id: selected.id,
+                                  codVerified: false,
+                                  codVerificationMethod: '',
+                                  verificationStatus: 'unverified',
+                                })
+                              }}
+                              disabled={updateMut.isPending}
+                            >
+                              Reset verification
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {selected.trackingNumber && (
                       <div className="rounded-lg bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-900 p-3">

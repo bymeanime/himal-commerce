@@ -184,6 +184,7 @@ export type Order = {
   trackingNumber: string | null
   codRiskScore: number | null
   codVerified: boolean
+  codVerificationMethod: string | null
   verificationStatus: string
   disputeStatus: string | null
   utm: string | null

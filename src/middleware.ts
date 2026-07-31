@@ -31,16 +31,40 @@ export function middleware(req: NextRequest) {
 
   // ====== CSRF: Origin/Referer check for state-changing methods ======
   // GET/HEAD/OPTIONS are safe; everything else requires same-origin.
+  //
+  // SECURITY (QA-019 fix): when NEXT_PUBLIC_APP_URL is set (production), we
+  // ONLY trust that origin — not the Host header, which is attacker-controllable.
+  // When APP_URL is unset (dev), we fall back to Host-based matching so local
+  // dev still works, but we still require HTTPS in production-like envs.
   if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
     const origin = req.headers.get('origin')
     const referer = req.headers.get('referer')
-
-    // Allow if no APP_URL configured (dev mode) — but still verify origin/referer
-    // matches the host header to prevent cross-origin POSTs from arbitrary sites.
     const host = req.headers.get('host')
-    const allowedOrigins = APP_URL
-      ? [APP_URL, `https://${host}`, `http://${host}`]
-      : [`https://${host}`, `http://${host}`]
+
+    const allowedOrigins: string[] = []
+    if (APP_URL) {
+      // Production: only the configured APP_URL is allowed.
+      // Derive both http and https variants ONLY if APP_URL is http (dev).
+      allowedOrigins.push(APP_URL)
+      // Also allow the same host via https for Vercel preview domains
+      if (APP_URL.startsWith('https://')) {
+        allowedOrigins.push(APP_URL.replace(/\/$/, ''))
+      }
+    } else if (host) {
+      // Dev fallback: trust Host header
+      allowedOrigins.push(`https://${host}`, `http://${host}`)
+    }
+
+    // In production, reject http:// origins (forces HTTPS)
+    if (process.env.NODE_ENV === 'production') {
+      const suppliedForCheck = origin || (referer ? new URL(referer).origin : null)
+      if (suppliedForCheck && suppliedForCheck.startsWith('http://')) {
+        return new NextResponse(
+          JSON.stringify({ error: { code: 'CSRF_INSECURE_ORIGIN', message: 'HTTP origins are not allowed in production.' } }),
+          { status: 403, headers: { 'content-type': 'application/json' } }
+        )
+      }
+    }
 
     const suppliedOrigin = origin || (referer ? new URL(referer).origin : null)
     if (!suppliedOrigin || !allowedOrigins.some(allowed => suppliedOrigin === allowed)) {

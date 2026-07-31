@@ -1,3 +1,4 @@
+import { safeJsonLd } from '@/lib/jsonld'
 import { db } from '@/lib/db'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
@@ -87,7 +88,7 @@ export default async function CategoryPage({ params }: Params) {
 
   return (
     <>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: safeJsonLd(jsonLd) }} />
       <div className="mx-auto max-w-7xl px-4 py-6 md:py-10">
         {/* Breadcrumbs */}
         <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-xs text-muted-foreground mb-6">

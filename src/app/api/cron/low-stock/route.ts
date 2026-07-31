@@ -10,9 +10,16 @@ import { db } from '@/lib/db'
 //   3. Optionally create an in-app notification
 
 export async function GET(req: NextRequest) {
+  // Fail closed (QA-009 fix) — see abandoned-cart cron for full rationale.
   const authHeader = req.headers.get('authorization')
-  const expected = `Bearer ${process.env.CRON_SECRET}`
-  if (process.env.CRON_SECRET && authHeader !== expected) {
+  const expected = process.env.CRON_SECRET
+  if (!expected) {
+    return NextResponse.json(
+      { error: 'CRON_SECRET env var is not set — cron endpoint is disabled.' },
+      { status: 500 }
+    )
+  }
+  if (authHeader !== `Bearer ${expected}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
