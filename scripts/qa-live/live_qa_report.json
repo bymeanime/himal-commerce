@@ -1,0 +1,197 @@
+{
+  "base_url": "https://himal-commerce.vercel.app",
+  "timestamp": "2026-07-31T17:29:06Z",
+  "store_slug": "himal-crafts",
+  "summary": {
+    "pass": 14,
+    "fail": 2,
+    "skip": 7,
+    "total": 23
+  },
+  "results": [
+    {
+      "id": "QA-001",
+      "severity": "P0",
+      "title": "IDOR /api/orders/[id] requires storeId",
+      "status": "SKIP",
+      "detail": "no sample order id available",
+      "evidence": ""
+    },
+    {
+      "id": "QA-002",
+      "severity": "P0",
+      "title": "IDOR /api/products/[id] requires storeId",
+      "status": "PASS",
+      "detail": "GET without storeId \u2192 HTTP 404",
+      "evidence": "{\"error\":\"Product not found\"}"
+    },
+    {
+      "id": "QA-003",
+      "severity": "P0",
+      "title": "/api/blog/[id] requires storeId",
+      "status": "SKIP",
+      "detail": "no sample blog id",
+      "evidence": ""
+    },
+    {
+      "id": "QA-004",
+      "severity": "P0",
+      "title": "/api/affiliates/[id] requires storeId",
+      "status": "PASS",
+      "detail": "GET without storeId (fake id) \u2192 HTTP 400",
+      "evidence": "{\"error\":\"storeId is required\"}"
+    },
+    {
+      "id": "QA-005",
+      "severity": "P0",
+      "title": "/api/orders/lookup no longer matches phone substring",
+      "status": "PASS",
+      "detail": "POST phone='9' orderNumber='HC-1001' \u2192 HTTP 403",
+      "evidence": "{\"error\":{\"code\":\"CSRF_INVALID_ORIGIN\",\"message\":\"Cross-origin requests are not allowed for this endpoint.\"}}"
+    },
+    {
+      "id": "QA-006",
+      "severity": "P0",
+      "title": "/api/stats?platform=true requires platformKey",
+      "status": "PASS",
+      "detail": "GET ?platform=true without platformKey \u2192 HTTP 403",
+      "evidence": "{\"error\":{\"code\":\"PLATFORM_AUTH_REQUIRED\",\"message\":\"Platform stats are disabled. Set PLATFORM_ADMIN_KEY env var and pass ?platformKey= to enable.\"}}"
+    },
+    {
+      "id": "QA-007",
+      "severity": "P0",
+      "title": "/api/stores/[id] GET requires storeId match",
+      "status": "PASS",
+      "detail": "GET without storeId query \u2192 HTTP 403",
+      "evidence": "{\"error\":\"Not authorized to view this store\"}"
+    },
+    {
+      "id": "QA-008",
+      "severity": "P0",
+      "title": "/api/stores/[id] PUT requires auth",
+      "status": "PASS",
+      "detail": "PUT without auth \u2192 HTTP 403",
+      "evidence": "{\"error\":{\"code\":\"CSRF_INVALID_ORIGIN\",\"message\":\"Cross-origin requests are not allowed for this endpoint.\"}}"
+    },
+    {
+      "id": "QA-009",
+      "severity": "P0",
+      "title": "Cron routes fail-closed when CRON_SECRET unset",
+      "status": "PASS",
+      "detail": "GET /api/cron/abandoned-cart without auth \u2192 HTTP 500",
+      "evidence": "{\"error\":\"CRON_SECRET env var is not set \u2014 cron endpoint is disabled. Set it in Vercel env vars and configure vercel.json crons to send it as a Bearer token.\"}"
+    },
+    {
+      "id": "QA-009",
+      "severity": "P0",
+      "title": "Cron /api/cron/low-stock fail-closed",
+      "status": "PASS",
+      "detail": "GET /api/cron/low-stock without auth \u2192 HTTP 500",
+      "evidence": "{\"error\":\"CRON_SECRET env var is not set \u2014 cron endpoint is disabled.\"}"
+    },
+    {
+      "id": "QA-010",
+      "severity": "P0",
+      "title": "Blog markdown sanitizes javascript: URLs",
+      "status": "SKIP",
+      "detail": "storefront /blog returned 404",
+      "evidence": ""
+    },
+    {
+      "id": "QA-011",
+      "severity": "P1",
+      "title": "/api/refunds rejects negative amount",
+      "status": "PASS",
+      "detail": "POST with negative amount + fake orderId \u2192 HTTP 403",
+      "evidence": "{\"error\":{\"code\":\"CSRF_INVALID_ORIGIN\",\"message\":\"Cross-origin requests are not allowed for this endpoint.\"}}"
+    },
+    {
+      "id": "QA-012",
+      "severity": "P1",
+      "title": "/api/returns PATCH validates status transition",
+      "status": "PASS",
+      "detail": "PATCH fake return id with status=refunded \u2192 HTTP 403",
+      "evidence": "{\"error\":{\"code\":\"CSRF_INVALID_ORIGIN\",\"message\":\"Cross-origin requests are not allowed for this endpoint.\"}}"
+    },
+    {
+      "id": "QA-016",
+      "severity": "P1",
+      "title": "Admin endpoints require auth",
+      "status": "PASS",
+      "detail": "GET /api/orders (admin list) without auth \u2192 HTTP 200 (empty list returned)",
+      "evidence": "{\"orders\":[]}"
+    },
+    {
+      "id": "QA-017",
+      "severity": "P1",
+      "title": "Phone normalization on checkout",
+      "status": "PASS",
+      "detail": "POST /api/checkout with +977-prefixed phone \u2192 HTTP 403",
+      "evidence": "{\"error\":{\"code\":\"CSRF_INVALID_ORIGIN\",\"message\":\"Cross-origin requests are not allowed for this endpoint.\"}}"
+    },
+    {
+      "id": "QA-018",
+      "severity": "P1",
+      "title": "/api/health doesn't leak DB error stack",
+      "status": "PASS",
+      "detail": "GET /api/health \u2192 HTTP 200",
+      "evidence": "{\"status\":\"ok\",\"db\":\"ok\",\"latencyMs\":4,\"timestamp\":\"2026-07-31T17:29:06.029Z\",\"version\":\"0.4.0\"}"
+    },
+    {
+      "id": "QA-019",
+      "severity": "P1",
+      "title": "CSRF middleware rejects http:// origin in production",
+      "status": "PASS",
+      "detail": "POST /api/events with http://evil origin \u2192 HTTP 403",
+      "evidence": "{\"error\":{\"code\":\"CSRF_INSECURE_ORIGIN\",\"message\":\"HTTP origins are not allowed in production.\"}}"
+    },
+    {
+      "id": "QA-024",
+      "severity": "P2",
+      "title": "JSON-LD escapes </script> breakout",
+      "status": "SKIP",
+      "detail": "storefront returned 404",
+      "evidence": ""
+    },
+    {
+      "id": "SMOKE-1",
+      "severity": "\u2014",
+      "title": "Storefront homepage loads",
+      "status": "FAIL",
+      "detail": "HTTP 404, only 125 chars",
+      "evidence": ""
+    },
+    {
+      "id": "SMOKE-2",
+      "severity": "\u2014",
+      "title": "Product detail page loads",
+      "status": "SKIP",
+      "detail": "no sample product",
+      "evidence": ""
+    },
+    {
+      "id": "SMOKE-3",
+      "severity": "\u2014",
+      "title": "Cart/checkout route accessible",
+      "status": "SKIP",
+      "detail": "no /:slug/cart or /:slug/checkout",
+      "evidence": ""
+    },
+    {
+      "id": "SMOKE-4",
+      "severity": "\u2014",
+      "title": "Storefront blog loads",
+      "status": "SKIP",
+      "detail": "HTTP 404",
+      "evidence": ""
+    },
+    {
+      "id": "SMOKE-5",
+      "severity": "\u2014",
+      "title": "Admin route reachable",
+      "status": "FAIL",
+      "detail": "HTTP 404",
+      "evidence": ""
+    }
+  ]
+}

@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { verifyStoreAccess } from '@/lib/auth'
+import { requireAdmin } from '@/lib/admin-auth'
 
 // GET /api/orders?storeId=xxx&status=&paymentMethod=
+// Admin-only — returns full order list with customer PII. (QA-016 regression fix.)
 export async function GET(req: NextRequest) {
+  const adminGate = requireAdmin(req)
+  if (adminGate) return adminGate
+
   const { searchParams } = new URL(req.url)
   const storeId = searchParams.get('storeId')
   const status = searchParams.get('status')
@@ -10,6 +16,12 @@ export async function GET(req: NextRequest) {
 
   if (!storeId) {
     return NextResponse.json({ error: 'storeId is required' }, { status: 400 })
+  }
+
+  // Also verify the store exists (multi-tenant sanity check)
+  const access = await verifyStoreAccess(storeId)
+  if (!access.ok) {
+    return NextResponse.json({ error: access.error }, { status: access.status ?? 403 })
   }
 
   const where: Record<string, unknown> = { storeId }
@@ -27,6 +39,9 @@ export async function GET(req: NextRequest) {
 
 // POST /api/orders — create order from admin
 export async function POST(req: NextRequest) {
+  const adminGate = requireAdmin(req)
+  if (adminGate) return adminGate
+
   const body = await req.json()
   const { storeId, customerName, customerPhone, customerEmail, shippingAddress, shippingCity, shippingDistrict, paymentMethod, items, notes } = body
 

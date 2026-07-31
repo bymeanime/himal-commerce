@@ -1,0 +1,253 @@
+{
+  "base_url": "https://himal-commerce.vercel.app",
+  "store_slug": "himal-crafts",
+  "store_id": "cms6d60lz0000ho6rr4v40yt5",
+  "summary": {
+    "pass": 23,
+    "fail": 7,
+    "skip": 0,
+    "total": 30
+  },
+  "results": [
+    {
+      "id": "SF-01",
+      "severity": "\u2014",
+      "title": "Marketing homepage loads",
+      "status": "PASS",
+      "detail": "HTTP 200, 32295 bytes",
+      "evidence": ""
+    },
+    {
+      "id": "SF-02",
+      "severity": "P0",
+      "title": "Storefront /s/:slug loads",
+      "status": "FAIL",
+      "detail": "HTTP 200, 93 chars visible",
+      "evidence": ""
+    },
+    {
+      "id": "SF-03",
+      "severity": "\u2014",
+      "title": "Storefront about page",
+      "status": "PASS",
+      "detail": "HTTP 200",
+      "evidence": ""
+    },
+    {
+      "id": "SF-04",
+      "severity": "\u2014",
+      "title": "Storefront contact page",
+      "status": "PASS",
+      "detail": "HTTP 200",
+      "evidence": ""
+    },
+    {
+      "id": "SF-05",
+      "severity": "\u2014",
+      "title": "Storefront blog index",
+      "status": "PASS",
+      "detail": "HTTP 200",
+      "evidence": ""
+    },
+    {
+      "id": "SF-06",
+      "severity": "\u2014",
+      "title": "Storefront wishlist",
+      "status": "PASS",
+      "detail": "HTTP 200",
+      "evidence": ""
+    },
+    {
+      "id": "SF-07",
+      "severity": "\u2014",
+      "title": "Storefront order lookup",
+      "status": "PASS",
+      "detail": "HTTP 200",
+      "evidence": ""
+    },
+    {
+      "id": "SF-08",
+      "severity": "\u2014",
+      "title": "Storefront search",
+      "status": "PASS",
+      "detail": "HTTP 200",
+      "evidence": ""
+    },
+    {
+      "id": "SF-09",
+      "severity": "P0",
+      "title": "Product detail page loads",
+      "status": "FAIL",
+      "detail": "HTTP 200, 50 chars visible",
+      "evidence": ""
+    },
+    {
+      "id": "SF-10",
+      "severity": "\u2014",
+      "title": "Category route exists (even if 404)",
+      "status": "PASS",
+      "detail": "HTTP 200",
+      "evidence": ""
+    },
+    {
+      "id": "API-01",
+      "severity": "P0",
+      "title": "Public products list",
+      "status": "PASS",
+      "detail": "HTTP 200, 8 products returned",
+      "evidence": ""
+    },
+    {
+      "id": "API-02",
+      "severity": "P0",
+      "title": "Products list requires storeId",
+      "status": "PASS",
+      "detail": "HTTP 400, body: {\"error\":\"storeId is required\"}",
+      "evidence": ""
+    },
+    {
+      "id": "API-03",
+      "severity": "P0",
+      "title": "Product GET requires storeId (QA-002)",
+      "status": "FAIL",
+      "detail": "HTTP 200, body: {\"product\":{\"id\":\"cms6d6eaz001qho6rey19oo50\",\"storeId\":\"cms6d60lz0000ho6rr4v40yt5\",\"title\":\"Timur (Nepali Pepper) 200g\",",
+      "evidence": ""
+    },
+    {
+      "id": "API-04",
+      "severity": "P0",
+      "title": "Product GET with wrong storeId \u2192 404",
+      "status": "PASS",
+      "detail": "HTTP 404, body: {\"error\":\"Product not found\"}",
+      "evidence": ""
+    },
+    {
+      "id": "API-05",
+      "severity": "P0",
+      "title": "Product GET with correct storeId works",
+      "status": "PASS",
+      "detail": "HTTP 200, has product data: True",
+      "evidence": ""
+    },
+    {
+      "id": "PII-01",
+      "severity": "P0",
+      "title": "/api/stores does not leak PII",
+      "status": "FAIL",
+      "detail": "leaked fields: ['ownerEmail', 'ownerPhone', 'supportPhone', 'supportEmail', 'address']",
+      "evidence": "sample: ownerEmail=bishnu@himalcrafts.np"
+    },
+    {
+      "id": "PII-02",
+      "severity": "P0",
+      "title": "/api/stores?slug= does not leak PII",
+      "status": "FAIL",
+      "detail": "leaked fields: ['ownerEmail', 'ownerPhone', 'supportPhone', 'supportEmail', 'address']",
+      "evidence": ""
+    },
+    {
+      "id": "API-06",
+      "severity": "\u2014",
+      "title": "Health endpoint",
+      "status": "PASS",
+      "detail": "HTTP 200",
+      "evidence": ""
+    },
+    {
+      "id": "API-07",
+      "severity": "\u2014",
+      "title": "Categories endpoint reachable",
+      "status": "PASS",
+      "detail": "HTTP 200",
+      "evidence": ""
+    },
+    {
+      "id": "API-08",
+      "severity": "\u2014",
+      "title": "Reviews endpoint reachable",
+      "status": "PASS",
+      "detail": "HTTP 400",
+      "evidence": ""
+    },
+    {
+      "id": "AUTH-01",
+      "severity": "P0",
+      "title": "/api/customers requires auth",
+      "status": "FAIL",
+      "detail": "HTTP 200",
+      "evidence": ""
+    },
+    {
+      "id": "AUTH-02",
+      "severity": "P0",
+      "title": "/api/orders requires auth",
+      "status": "FAIL",
+      "detail": "HTTP 200 with 4 orders leaked!",
+      "evidence": ""
+    },
+    {
+      "id": "SEO",
+      "severity": "\u2014",
+      "title": "/robots.txt reachable",
+      "status": "PASS",
+      "detail": "HTTP 200",
+      "evidence": ""
+    },
+    {
+      "id": "SEO",
+      "severity": "\u2014",
+      "title": "/sitemap.xml reachable",
+      "status": "PASS",
+      "detail": "HTTP 200",
+      "evidence": ""
+    },
+    {
+      "id": "SEO",
+      "severity": "\u2014",
+      "title": "/about reachable",
+      "status": "PASS",
+      "detail": "HTTP 200",
+      "evidence": ""
+    },
+    {
+      "id": "SEO",
+      "severity": "\u2014",
+      "title": "/privacy reachable",
+      "status": "PASS",
+      "detail": "HTTP 200",
+      "evidence": ""
+    },
+    {
+      "id": "SEO",
+      "severity": "\u2014",
+      "title": "/terms reachable",
+      "status": "PASS",
+      "detail": "HTTP 200",
+      "evidence": ""
+    },
+    {
+      "id": "SEO",
+      "severity": "\u2014",
+      "title": "/cookie-policy reachable",
+      "status": "PASS",
+      "detail": "HTTP 200",
+      "evidence": ""
+    },
+    {
+      "id": "SEO",
+      "severity": "\u2014",
+      "title": "/shipping-policy reachable",
+      "status": "PASS",
+      "detail": "HTTP 200",
+      "evidence": ""
+    },
+    {
+      "id": "SEO",
+      "severity": "\u2014",
+      "title": "/refund-policy reachable",
+      "status": "PASS",
+      "detail": "HTTP 200",
+      "evidence": ""
+    }
+  ]
+}

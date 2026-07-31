@@ -36,19 +36,20 @@ async function verifyOwnership(productId: string, storeId: string) {
 }
 
 // GET /api/products/[id]?storeId=...
+// storeId is MANDATORY — without it the route 400s. (QA-002 regression fix.)
 export async function GET(req: NextRequest, { params }: Params) {
   const { id } = await params
   const storeId = new URL(req.url).searchParams.get('storeId')
-  if (storeId) {
-    // Tenant isolation check (only enforced when storeId is provided)
-    const owns = await verifyOwnership(id, storeId)
-    if (!owns) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
+  if (!storeId) {
+    return NextResponse.json({ error: 'storeId is required for authorization' }, { status: 400 })
   }
+  const owns = await verifyOwnership(id, storeId)
+  if (!owns) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
   const product = await db.product.findUnique({
     where: { id },
     include: {
       category: true,
-      store: true,
+      store: { select: { id: true, name: true, slug: true, currency: true, primaryColor: true, accentColor: true } },
       variants: { orderBy: { sortOrder: 'asc' } },
       images: { orderBy: { sortOrder: 'asc' } },
       reviews: { where: { status: 'approved' }, orderBy: { createdAt: 'desc' }, take: 10 },

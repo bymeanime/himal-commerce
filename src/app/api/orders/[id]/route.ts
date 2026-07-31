@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { logAudit } from '@/lib/audit'
+import { requireAdmin } from '@/lib/admin-auth'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -34,6 +35,8 @@ async function verifyOrderOwnership(orderId: string, storeId: string) {
 // Without it, any caller could enumerate orders by id.
 export async function GET(req: NextRequest, { params }: Params) {
   const { id } = await params
+  const adminGate = requireAdmin(req)
+  if (adminGate) return adminGate
   const storeId = new URL(req.url).searchParams.get('storeId')
   if (!storeId) {
     return NextResponse.json({ error: 'storeId is required for authorization' }, { status: 400 })

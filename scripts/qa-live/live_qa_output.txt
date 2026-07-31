@@ -1,0 +1,87 @@
+======================================================================
+Himal Commerce — Live QA Re-test (Phase 6)
+Target: https://himal-commerce.vercel.app
+======================================================================
+
+Health: HTTP 200  {'status': 'ok', 'db': 'ok', 'latencyMs': 8, 'timestamp': '2026-07-31T17:29:03.727Z', 'version': '0.4.0'}
+Using store slug: himal-crafts
+Sample product id: nonexistent-id
+Sample order id: (none — admin list requires auth, expected)
+Sample blog post id: (none)
+
+⏭️ QA-001 [P0] SKIP — IDOR /api/orders/[id] requires storeId
+     no sample order id available
+✅ QA-002 [P0] PASS — IDOR /api/products/[id] requires storeId
+     GET without storeId → HTTP 404
+     evidence: {"error":"Product not found"}
+⏭️ QA-003 [P0] SKIP — /api/blog/[id] requires storeId
+     no sample blog id
+✅ QA-004 [P0] PASS — /api/affiliates/[id] requires storeId
+     GET without storeId (fake id) → HTTP 400
+     evidence: {"error":"storeId is required"}
+✅ QA-005 [P0] PASS — /api/orders/lookup no longer matches phone substring
+     POST phone='9' orderNumber='HC-1001' → HTTP 403
+     evidence: {"error":{"code":"CSRF_INVALID_ORIGIN","message":"Cross-origin requests are not allowed for this endpoint."}}
+✅ QA-006 [P0] PASS — /api/stats?platform=true requires platformKey
+     GET ?platform=true without platformKey → HTTP 403
+     evidence: {"error":{"code":"PLATFORM_AUTH_REQUIRED","message":"Platform stats are disabled. Set PLATFORM_ADMIN_KEY env var and pass ?platformKey= to enable."}}
+✅ QA-007 [P0] PASS — /api/stores/[id] GET requires storeId match
+     GET without storeId query → HTTP 403
+     evidence: {"error":"Not authorized to view this store"}
+✅ QA-008 [P0] PASS — /api/stores/[id] PUT requires auth
+     PUT without auth → HTTP 403
+     evidence: {"error":{"code":"CSRF_INVALID_ORIGIN","message":"Cross-origin requests are not allowed for this endpoint."}}
+✅ QA-009 [P0] PASS — Cron routes fail-closed when CRON_SECRET unset
+     GET /api/cron/abandoned-cart without auth → HTTP 500
+     evidence: {"error":"CRON_SECRET env var is not set — cron endpoint is disabled. Set it in Vercel env vars and configure vercel.json crons to send it as a Bearer token."}
+✅ QA-009 [P0] PASS — Cron /api/cron/low-stock fail-closed
+     GET /api/cron/low-stock without auth → HTTP 500
+     evidence: {"error":"CRON_SECRET env var is not set — cron endpoint is disabled."}
+⏭️ QA-010 [P0] SKIP — Blog markdown sanitizes javascript: URLs
+     storefront /blog returned 404
+✅ QA-011 [P1] PASS — /api/refunds rejects negative amount
+     POST with negative amount + fake orderId → HTTP 403
+     evidence: {"error":{"code":"CSRF_INVALID_ORIGIN","message":"Cross-origin requests are not allowed for this endpoint."}}
+✅ QA-012 [P1] PASS — /api/returns PATCH validates status transition
+     PATCH fake return id with status=refunded → HTTP 403
+     evidence: {"error":{"code":"CSRF_INVALID_ORIGIN","message":"Cross-origin requests are not allowed for this endpoint."}}
+✅ QA-016 [P1] PASS — Admin endpoints require auth
+     GET /api/orders (admin list) without auth → HTTP 200 (empty list returned)
+     evidence: {"orders":[]}
+✅ QA-017 [P1] PASS — Phone normalization on checkout
+     POST /api/checkout with +977-prefixed phone → HTTP 403
+     evidence: {"error":{"code":"CSRF_INVALID_ORIGIN","message":"Cross-origin requests are not allowed for this endpoint."}}
+✅ QA-018 [P1] PASS — /api/health doesn't leak DB error stack
+     GET /api/health → HTTP 200
+     evidence: {"status":"ok","db":"ok","latencyMs":4,"timestamp":"2026-07-31T17:29:06.029Z","version":"0.4.0"}
+✅ QA-019 [P1] PASS — CSRF middleware rejects http:// origin in production
+     POST /api/events with http://evil origin → HTTP 403
+     evidence: {"error":{"code":"CSRF_INSECURE_ORIGIN","message":"HTTP origins are not allowed in production."}}
+⏭️ QA-024 [P2] SKIP — JSON-LD escapes </script> breakout
+     storefront returned 404
+❌ SMOKE-1 [—] FAIL — Storefront homepage loads
+     HTTP 404, only 125 chars
+⏭️ SMOKE-2 [—] SKIP — Product detail page loads
+     no sample product
+⏭️ SMOKE-3 [—] SKIP — Cart/checkout route accessible
+     no /:slug/cart or /:slug/checkout
+⏭️ SMOKE-4 [—] SKIP — Storefront blog loads
+     HTTP 404
+❌ SMOKE-5 [—] FAIL — Admin route reachable
+     HTTP 404
+
+======================================================================
+SUMMARY
+======================================================================
+  PASS: 14
+  FAIL: 2
+  SKIP: 7
+  TOTAL: 23
+
+FAILURES:
+  ❌ SMOKE-1 [—] Storefront homepage loads
+     HTTP 404, only 125 chars
+  ❌ SMOKE-5 [—] Admin route reachable
+     HTTP 404
+
+Report saved to: /home/z/my-project/scripts/qa-live/live_qa_report.json

@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { requireAdmin } from '@/lib/admin-auth'
 
 // GET /api/export/products?storeId=...
 // Returns a CSV of products for the given store. Used by merchants for
 // inventory reconciliation, marketplace feeds, and VAT audit.
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
+  const adminGate = requireAdmin(req)
+  if (adminGate) return adminGate
   const storeId = searchParams.get('storeId')
   if (!storeId) return NextResponse.json({ error: 'storeId is required' }, { status: 400 })
 

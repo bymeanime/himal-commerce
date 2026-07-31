@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { verifyStoreAccess } from '@/lib/auth'
+import { requireAdmin } from '@/lib/admin-auth'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
+  const adminGate = requireAdmin(req)
+  if (adminGate) return adminGate
   const storeId = searchParams.get('storeId')
   if (!storeId) return NextResponse.json({ error: 'storeId required' }, { status: 400 })
 

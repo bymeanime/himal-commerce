@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { requireAdmin } from '@/lib/admin-auth'
 
 // GET /api/returns?storeId=...&status=...
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
+  const adminGate = requireAdmin(req)
+  if (adminGate) return adminGate
   const storeId = searchParams.get('storeId')
   const status = searchParams.get('status')
 

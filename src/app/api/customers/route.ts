@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { requireAdmin } from '@/lib/admin-auth'
 
 // GET /api/customers?storeId=xxx
+// Admin-only — returns customer PII (name, phone, email, address). (QA-016 regression fix.)
 export async function GET(req: NextRequest) {
+  const adminGate = requireAdmin(req)
+  if (adminGate) return adminGate
+
   const { searchParams } = new URL(req.url)
   const storeId = searchParams.get('storeId')
 
@@ -50,6 +55,9 @@ export async function GET(req: NextRequest) {
 
 // POST /api/customers
 export async function POST(req: NextRequest) {
+  const adminGate = requireAdmin(req)
+  if (adminGate) return adminGate
+
   const body = await req.json()
   const { storeId, name, phone, email, address, city, district } = body
   if (!storeId || !name || !phone) {
